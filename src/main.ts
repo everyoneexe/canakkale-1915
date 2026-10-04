@@ -59,6 +59,9 @@ class Game {
   }
 
   async start(): Promise<void> {
+    // Taraf butonları HTML'de `disabled` geliyor. Harita dokusu (756 KB)
+    // inmeden etkinleştirilmezler; yoksa buton görünür olduğu hâlde dinleyici
+    // bağlanmadığı için ilk tıklama kayboluyor.
     await this.view.init($<HTMLCanvasElement>('harita'));
     // İmleç panellerin üstüne geçince harita ipucusu ekranda asılı kalmasın.
     for (const id of ['ustbar', 'panel', 'modlar', 'gunluk']) {
@@ -70,6 +73,13 @@ class Game {
     this.bindChrome();
     this.view.setState(this.state);
     this.refresh();
+
+    $('taraf-sec').setAttribute('aria-busy', 'false');
+    for (const b of document.querySelectorAll<HTMLButtonElement>('.taraf')) {
+      b.disabled = false;
+    }
+    $('acilis-durum').textContent =
+      'Harita: AWS Terrain Tiles (SRTM) · Yer adları: OpenStreetMap (ODbL)';
   }
 
   newCampaign(side: Side): void {

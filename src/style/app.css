@@ -654,8 +654,19 @@ body {
   cursor: pointer;
   transition: border-color 0.12s;
 }
-.taraf:hover {
+.taraf:hover:not(:disabled) {
   border-color: var(--accent);
+}
+
+/* Harita dokusu inmeden taraf seçilemez: aksi hâlde buton görünür ama
+   olay dinleyicisi henüz bağlanmadığı için tıklama sessizce kayboluyor. */
+.taraf:disabled {
+  opacity: 0.4;
+  cursor: progress;
+}
+
+#taraf-sec[aria-busy='true'] .taraf-ad {
+  color: var(--text-faint);
 }
 .taraf-ad {
   display: block;
