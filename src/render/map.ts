@@ -134,6 +134,12 @@ export class MapView {
   // ── Hareket ───────────────────────────────────────────────────────
   /** Kamera hedefi; her kare mevcut değere doğru yumuşatılır. */
   private camTarget: { x: number; y: number; zoom: number } | null = null;
+  /** Süreli uçuş (açılış dalışı). */
+  private flight: {
+    fromX: number; fromY: number; fromZoom: number;
+    toX: number; toY: number; toZoom: number;
+    t0: number; ms: number;
+  } | null = null;
   /** İl dolgularının hedef rengi/saydamlığı — mod değişiminde çapraz geçiş. */
   private fillTarget = new Map<ProvinceId, { colour: number; alpha: number }>();
   private fillNow = new Map<ProvinceId, { colour: number; alpha: number }>();
@@ -275,6 +281,29 @@ export class MapView {
       source = Texture.from(cv);
     }
 
+    // ── Dünya zemini ────────────────────────────────────────────────
+    // Çanakkale rölyefi yalnız indirilen kutuyu kaplıyor ve kenarında
+    // haritanın bittiği keskin bir dikdörtgen bırakıyordu. Arkasına düşük
+    // çözünürlüklü dünya dokusu serilir: tiyatronun çevresi, Ege, Anadolu
+    // ve Balkanlar görünür kalır. Detaylı yerel rölyef üstünde durur.
+    if (mapKind() === 'canakkale') {
+      const o = gameMap().origin;
+      const kx = Math.cos((o.lat * Math.PI) / 180) * 111320;
+      const ky = 110574;
+      const worldTex: Texture = await Assets.load('world-relief.webp');
+      const back = new Sprite(worldTex);
+      back.x = (-180 - o.lon) * kx;
+      back.y = -(82 - o.lat) * ky;
+      back.width = 360 * kx;
+      back.height = 164 * ky;
+      // Uzaklık pusu: bağlam olarak dursun, tiyatroyla yarışmasın.
+      // Çözünürlük farkı (yerel 29 m/px, dünya ~10 km/px) bu sayede
+      // "uzaktaki arazi" gibi okunuyor, dikiş gibi değil.
+      back.alpha = 0.38;
+      back.tint = 0x6e6e6e;
+      this.gRelief.addChild(back);
+    }
+
     const sprite = new Sprite(source);
     sprite.x = box.minX;
     sprite.y = box.minY;
@@ -413,8 +442,9 @@ export class MapView {
         e.preventDefault();
         const before = this.toWorld(e.offsetX, e.offsetY);
         const k = Math.exp(-e.deltaY * 0.0014);
-        // Sınırlar açılış kadrajına göre: cephe küçükse daha çok yakınlaşılır.
-        const lo = this.fitZoom * 0.5;
+        // Aşağı sınır bol: oyuncu geriye çekilip tiyatronun dünyadaki
+        // yerini görebilmeli.
+        const lo = this.fitZoom * 0.04;
         const hi = this.fitZoom * 42;
         this.zoom = Math.min(hi, Math.max(lo, this.zoom * k));
         const after = this.toWorld(e.offsetX, e.offsetY);
@@ -544,6 +574,21 @@ export class MapView {
     for (const l of this.labelPool) l.visible = false;
   }
 
+  /**
+   * Kamerayı anında bir ile kilitle — animasyonsuz.
+   * `introSweep` hedefini MEVCUT pan/zoom'dan okuduğu için odaklama ondan
+   * ÖNCE ve animasyonsuz yapılmalı. Aksi hâlde `centreOn` uçuş sırasındaki
+   * minik zoom'u hedef alıp kamerayı geri dışarı çekiyor.
+   */
+  focusInstant(id: ProvinceId): void {
+    const c = prov(id).center;
+    this.camTarget = null;
+    this.flight = null;
+    this.panX = this.app.screen.width / 2 - c.x * this.zoom;
+    this.panY = this.app.screen.height / 2 - c.y * this.zoom;
+    this.applyTransform();
+  }
+
   centreOn(id: ProvinceId, zoom = this.zoom): void {
     const c = prov(id).center;
     this.glideTo(
@@ -563,14 +608,15 @@ export class MapView {
     const tx = this.panX;
     const ty = this.panY;
     const tz = this.zoom;
-    const k = 0.78;
+    // Çok geniş bir görüşten başla (çevredeki dünya görünür) ve tiyatroya uç.
+    const k = 0.1;
     const cx = this.app.screen.width / 2;
     const cy = this.app.screen.height / 2;
     this.zoom = tz * k;
     this.panX = cx + (tx - cx) * k;
     this.panY = cy + (ty - cy) * k;
     this.applyTransform();
-    this.camTarget = { x: tx, y: ty, zoom: tz };
+    this.flyTo(tx, ty, tz, 1500);
   }
 
   /** Bu illerde muharebe oldu — kısa bir parlama göster. */
@@ -594,8 +640,25 @@ export class MapView {
     let dirty = false;
     let camMoved = false;
 
+    // Süreli uçuş önceliklidir.
+    if (this.flight) {
+      const f = this.flight;
+      const u = Math.min(1, (now - f.t0) / f.ms);
+      // ease-out: başta hızlı, sonda yumuşak duruş.
+      const e = 1 - (1 - u) ** 3;
+      // Yakınlaştırma LOGARİTMİK aradeğerlenir; doğrusal olursa uçuşun
+      // başında hiçbir şey olmuyor, sonunda aniden içeri dalıyor.
+      this.zoom = f.fromZoom * (f.toZoom / f.fromZoom) ** e;
+      this.panX = f.fromX + (f.toX - f.fromX) * e;
+      this.panY = f.fromY + (f.toY - f.fromY) * e;
+      this.applyTransform();
+      dirty = true;
+      camMoved = true;
+      if (u >= 1) this.flight = null;
+    }
+
     // Kamera
-    if (this.camTarget) {
+    if (!this.flight && this.camTarget) {
       const k = this.reduced ? 1 : 1 - Math.exp(-dt / 95);
       const dx = this.camTarget.x - this.panX;
       const dy = this.camTarget.y - this.panY;
@@ -656,6 +719,31 @@ export class MapView {
     } else if (dirty) {
       this.drawHighlight();
     }
+  }
+
+  /**
+   * Süreli, eğrili kamera uçuşu. Üstel yumuşatma kısa düzeltmeler için iyi
+   * ama "bölgeye uç" hissi vermiyor; burada süre ve eğri açıkça verilir.
+   */
+  private flyTo(x: number, y: number, zoom: number, ms: number): void {
+    if (this.reduced) {
+      this.panX = x;
+      this.panY = y;
+      this.zoom = zoom;
+      this.applyTransform();
+      return;
+    }
+    this.camTarget = null;
+    this.flight = {
+      fromX: this.panX,
+      fromY: this.panY,
+      fromZoom: this.zoom,
+      toX: x,
+      toY: y,
+      toZoom: zoom,
+      t0: performance.now(),
+      ms,
+    };
   }
 
   /** Kamerayı yumuşak biçimde hedefe götür. */

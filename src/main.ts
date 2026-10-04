@@ -205,16 +205,18 @@ class Game {
     $('acilis').hidden = true;
     delete $('acilis').dataset.cikis;
     delete $('harita').dataset.giriyor;
-    this.view.introSweep();
     $('marka-ana').textContent = useOwnMap ? 'ÇANAKKALE' : th.name.toLocaleUpperCase('tr-TR');
     $('marka-yil').textContent = th.start.slice(0, 4);
     this.view.selection = null;
     this.view.targeting = false;
     this.view.setState(this.state);
     this.refresh();
+    // SIRA: önce animasyonsuz odakla, SONRA uçuşu başlat. Tersi olursa
+    // uçuş biter bitmez centreOn eski (minik) zoom'u hedefleyip geri çıkıyor.
     if (useOwnMap) {
-      this.view.centreOn(side === 'ottoman' ? 'd_dar_bogaz' : 'd_bogaz_agzi');
+      this.view.focusInstant(side === 'ottoman' ? 'd_dar_bogaz' : 'd_bogaz_agzi');
     }
+    this.view.introSweep();
   }
 
 
