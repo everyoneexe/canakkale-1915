@@ -124,6 +124,8 @@ export class MapView {
   private zoom = 1;
   /** Açılış kadrajındaki yakınlaştırma — zoom sınırları buna göre. */
   private fitZoom = 1;
+  /** Tiyatronun arkasındaki dünya dokusu; görünürlüğü zoom'a bağlı. */
+  private worldBack: Sprite | null = null;
   private panX = 0;
   private panY = 0;
   private hovered: ProvinceId | null = null;
@@ -296,12 +298,9 @@ export class MapView {
       back.y = -(82 - o.lat) * ky;
       back.width = 360 * kx;
       back.height = 164 * ky;
-      // Uzaklık pusu: bağlam olarak dursun, tiyatroyla yarışmasın.
-      // Çözünürlük farkı (yerel 29 m/px, dünya ~10 km/px) bu sayede
-      // "uzaktaki arazi" gibi okunuyor, dikiş gibi değil.
-      back.alpha = 0.38;
-      back.tint = 0x6e6e6e;
+      this.worldBack = back;
       this.gRelief.addChild(back);
+      this.tuneWorldBack();
     }
 
     const sprite = new Sprite(source);
@@ -422,7 +421,29 @@ export class MapView {
     this.applyTransform();
   }
 
+  /**
+   * Dünya zemini zoom'a göre açılır.
+   *
+   * Tiyatroya yakınken düşük çözünürlüklü dünya dokusu detaylı rölyefle
+   * yarışmamalı: soluk bir uzaklık pusu olarak kalır. Oyuncu geriye
+   * çekildiğinde ise asıl gösterilecek şey odur, bu yüzden tam parlaklığa
+   * çıkar. Aksi hâlde uzaklaştırınca ekran kapkara kalıyordu.
+   */
+  private tuneWorldBack(): void {
+    const b = this.worldBack;
+    if (!b) return;
+    // r = 1 tiyatro kadrajı, r < 1 geriye çekilmiş.
+    const r = this.zoom / this.fitZoom;
+    // log ölçekte 1.0 -> puslu, 0.22 -> tam dünya.
+    const k = Math.min(1, Math.max(0, Math.log(1 / r) / Math.log(1 / 0.22)));
+    const e = k * k * (3 - 2 * k);
+    b.alpha = 0.34 + e * 0.66;
+    const g = Math.round(0x6e + e * (0xff - 0x6e));
+    b.tint = (g << 16) | (g << 8) | g;
+  }
+
   private applyTransform(): void {
+    this.tuneWorldBack();
     this.world.scale.set(this.zoom);
     this.world.position.set(this.panX, this.panY);
   }
@@ -453,7 +474,7 @@ export class MapView {
         this.applyTransform();
         this.draw();
       },
-      { passive: false },
+      { passive: false }
     );
 
     this.app.stage.on('pointerdown', (e: FederatedPointerEvent) => {
