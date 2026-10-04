@@ -155,6 +155,27 @@ türetmek hem çalıştı hem de rölyefle %100 tutarlı sonuç verdi.
 * **Rölyef**: gölgelendirme **Python'da** yapılıp WebP olarak paketlenir.
   Tarayıcıda 7,6 milyon pikseli boyamak saniyeler sürüyordu ve PNG 10 MB
   geliyordu; ön gölgelendirilmiş WebP 550 KB.
+* **Çözünürlük kademeleri (LOD)**: tek bir dünya dokusu 11 px/derece, yani
+  ~10 km/piksel — tiyatronun dışında yakınlaştırınca bulanık bir leke.
+  `tools/world/build_lod.py` terrarium karolarından iki ara kademe üretir ve
+  kaba → ince sırayla üst üste serilir:
+
+  | kademe | çözünürlük | kapsam |
+  | --- | --- | --- |
+  | `world-relief` | 11 px/° (~10 km) | tüm dünya |
+  | `lod-region` | 91 px/° (~1,2 km) | Osmanlı coğrafyası |
+  | `lod-near` | 364 px/° (~305 m) | Ege + Marmara |
+  | tiyatro | 1240 px/° (~29 m) | Çanakkale |
+
+  Gölge sertliği piksel boyutundan **bağımsız** tutulur: `np.gradient` piksel
+  başına Δyükseklik verir, çözünürlük arttıkça küçülür ve aynı yamaç ince
+  kademede sönük çıkardı. Gerçek eğime (metre/metre) sabit `K = 111320·zs /
+  (px/derece)` uygulanır, böylece kademe sınırlarında parlaklık dikişi olmaz.
+  Tiyatro rölyefi de aynı rampaya çekildi — önceden ortada koyu bir
+  dikdörtgen olarak duruyordu.
+* **Zoom'a bağlı puslandırma**: tiyatro kadrajında dünya kademeleri soluk bir
+  uzaklık pusu (alpha 0,34); geriye çekilince tam parlaklığa çıkar. Hepsi tek
+  konteynerde olduğu için aralarında parlaklık farkı oluşmaz.
 * **Küre**: WebGL2 ile ortografik küre ışın-izi. Ekran dörtgenine bir
   fragman gölgelendirici çizilir; her piksel için ters ortografik izdüşümle
   enlem/boylam bulunup arazi ve siyasi maske dokuları örneklenir. Tek çizim

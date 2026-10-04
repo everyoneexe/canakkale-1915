@@ -23,6 +23,12 @@ import {
 import { C, LAYER } from '../style/tokens.ts';
 import { fortRange, liveShips, minefieldsIn } from '../engine/naval.ts';
 import { TERRAINS } from '../data/units.ts';
+import lodMeta from '../data/lod.json';
+
+/** Bölgesel rölyef kademeleri — `tools/world/build_lod.py` üretir. */
+const LOD = lodMeta as {
+  levels: { image: string; west: number; south: number; east: number; north: number }[];
+};
 
 /**
  * Harita çizimi — @destanevreni'nin animasyonundaki görsel dil:
@@ -124,8 +130,8 @@ export class MapView {
   private zoom = 1;
   /** Açılış kadrajındaki yakınlaştırma — zoom sınırları buna göre. */
   private fitZoom = 1;
-  /** Tiyatronun arkasındaki dünya dokusu; görünürlüğü zoom'a bağlı. */
-  private worldBack: Sprite | null = null;
+  /** Tiyatronun arkasındaki dünya kademeleri; görünürlüğü zoom'a bağlı. */
+  private gWorld = new Container();
   private panX = 0;
   private panY = 0;
   private hovered: ProvinceId | null = null;
@@ -252,30 +258,44 @@ export class MapView {
         elev[px] = d[i]! * 256 + d[i + 1]! - 1000;
         land[px] = d[i + 2]! / 255;
       }
+      // Dünya kademeleriyle BİREBİR aynı dil: aynı ışık yönü, aynı yükseklik
+      // rampası, aynı deniz derinliği. Daha önce burası kendi sabitlerini
+      // (yükseklik/500, ×0,78) kullanıyordu ve tiyatro, çevresindeki LOD
+      // dokusunun ortasında koyu bir dikdörtgen olarak duruyordu.
+      //
+      // Gölge sertliği piksel boyutundan bağımsız tutulur: `build_lod.py`
+      // ile aynı K sabiti, gerçek eğime (metre/metre) uygulanır.
+      const K = (111320 * 0.04) / (4096 / 360);
+      const mppX = (box.maxX - box.minX) / w;
+      const mppY = (box.maxY - box.minY) / h;
       const SUN = { x: -0.72, y: -0.6, z: 0.35 };
       for (let y = 0; y < h; y++) {
         for (let x = 0; x < w; x++) {
           const px = y * w + x;
           const i = px * 4;
-          if (land[px]! < 0.45) {
-            const t = land[px]! / 0.45;
-            d[i] = 3 + t * 5;
-            d[i + 1] = 8 + t * 8;
-            d[i + 2] = 16 + t * 12;
-            d[i + 3] = 255;
-            continue;
-          }
-          const dx = (elev[x < w - 1 ? px + 1 : px]! - elev[x > 0 ? px - 1 : px]!) * 2.6;
-          const dy = (elev[y < h - 1 ? px + w : px]! - elev[y > 0 ? px - w : px]!) * 2.6;
-          const len = Math.hypot(dx, dy, 120) || 1;
+          const e = elev[px]!;
+          // Merkezî fark — np.gradient ile aynı.
+          const gx =
+            (elev[x < w - 1 ? px + 1 : px]! - elev[x > 0 ? px - 1 : px]!) /
+            (x > 0 && x < w - 1 ? 2 : 1);
+          const gy =
+            (elev[y < h - 1 ? px + w : px]! - elev[y > 0 ? px - w : px]!) /
+            (y > 0 && y < h - 1 ? 2 : 1);
+          const dx = (K * gx) / mppX;
+          const dy = (K * gy) / mppY;
+          const ln = Math.sqrt(dx * dx + dy * dy + 1);
           const shade = Math.max(
-            0.35,
-            Math.min(1.5, ((-dx * SUN.x - dy * SUN.y + 120 * SUN.z) / len) * 2.1),
+            0.42,
+            Math.min(1.55, ((-dx * SUN.x - dy * SUN.y + SUN.z) / ln) * 2.0),
           );
-          const t = Math.min(1, Math.max(0, elev[px]!) / 500) ** 0.8;
-          d[i] = Math.round(Math.min(255, (26 + t * 61) * shade * 0.78));
-          d[i + 1] = Math.round(Math.min(255, (22 + t * 43) * shade * 0.78));
-          d[i + 2] = Math.round(Math.min(255, (16 + t * 11) * shade * 0.8));
+          const t = Math.min(1, Math.max(0, e) / 3200) ** 0.72;
+          const depth = Math.min(1, Math.max(0, -Math.min(e, 0)) / 6000);
+          const a = land[px]!;
+          const mix = (lv: number, sv: number) =>
+            Math.round(Math.min(255, Math.max(0, lv * a + sv * (1 - a))));
+          d[i] = mix((26 + t * 61) * shade * 0.8, 9 - depth * 6);
+          d[i + 1] = mix((22 + t * 43) * shade * 0.8, 16 - depth * 9);
+          d[i + 2] = mix((16 + t * 11) * shade * 0.82, 28 - depth * 13);
           d[i + 3] = 255;
         }
       }
@@ -283,23 +303,43 @@ export class MapView {
       source = Texture.from(cv);
     }
 
-    // ── Dünya zemini ────────────────────────────────────────────────
-    // Çanakkale rölyefi yalnız indirilen kutuyu kaplıyor ve kenarında
-    // haritanın bittiği keskin bir dikdörtgen bırakıyordu. Arkasına düşük
-    // çözünürlüklü dünya dokusu serilir: tiyatronun çevresi, Ege, Anadolu
-    // ve Balkanlar görünür kalır. Detaylı yerel rölyef üstünde durur.
+    // ── Dünya zemini: çözünürlük kademeleri ─────────────────────────
+    // Tek bir dünya dokusu 11 px/derece, yani ~10 km/piksel. Tiyatro
+    // kutusunun dışında yakınlaştırınca bulanık bir lekeye dönüşüyordu.
+    // Kaba → ince sırayla üst üste serilir, ince olan kabayı örter:
+    //
+    //   world-relief   11 px/°   (~10 km)   tüm dünya
+    //   lod-region     91 px/°   (~1,2 km)  Osmanlı coğrafyası
+    //   lod-near      364 px/°   (~305 m)   Ege + Marmara
+    //   tiyatro      1240 px/°   (~29 m)    Çanakkale — en üstte
+    //
+    // Hepsi aynı gölgelendirme dilinde üretildiği için kademe sınırları
+    // görünmez; tek fark keskinlik. Tümü `gWorld` içinde durur, böylece
+    // zoom'a bağlı puslandırma hepsine BİRLİKTE uygulanır ve aralarında
+    // parlaklık dikişi oluşmaz.
     if (mapKind() === 'canakkale') {
       const o = gameMap().origin;
       const kx = Math.cos((o.lat * Math.PI) / 180) * 111320;
       const ky = 110574;
-      const worldTex: Texture = await Assets.load('world-relief.webp');
-      const back = new Sprite(worldTex);
-      back.x = (-180 - o.lon) * kx;
-      back.y = -(82 - o.lat) * ky;
-      back.width = 360 * kx;
-      back.height = 164 * ky;
-      this.worldBack = back;
-      this.gRelief.addChild(back);
+      const place = (t: Texture, w: number, s: number, e: number, n: number) => {
+        const sp = new Sprite(t);
+        sp.x = (w - o.lon) * kx;
+        sp.y = -(n - o.lat) * ky;
+        sp.width = (e - w) * kx;
+        sp.height = (n - s) * ky;
+        this.gWorld.addChild(sp);
+      };
+
+      const [worldTex, ...lodTex] = await Promise.all([
+        Assets.load('world-relief.webp') as Promise<Texture>,
+        ...LOD.levels.map((l) => Assets.load(l.image) as Promise<Texture>),
+      ]);
+      place(worldTex, -180, -82, 180, 82);
+      LOD.levels.forEach((l, i) =>
+        place(lodTex[i]!, l.west, l.south, l.east, l.north),
+      );
+
+      this.gRelief.addChild(this.gWorld);
       this.tuneWorldBack();
     }
 
@@ -430,8 +470,8 @@ export class MapView {
    * çıkar. Aksi hâlde uzaklaştırınca ekran kapkara kalıyordu.
    */
   private tuneWorldBack(): void {
-    const b = this.worldBack;
-    if (!b) return;
+    const b = this.gWorld;
+    if (b.children.length === 0) return;
     // r = 1 tiyatro kadrajı, r < 1 geriye çekilmiş.
     const r = this.zoom / this.fitZoom;
     // log ölçekte 1.0 -> puslu, 0.22 -> tam dünya.
