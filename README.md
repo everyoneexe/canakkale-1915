@@ -187,6 +187,8 @@ tam bu oldu ve 19 Şubat'ta Ark Royal ile Amethyst battı.
 
 ## Yayına alma (Vercel)
 
+Canlı: **<https://canakkale-1915.vercel.app>**
+
 Statik bir site; sunucu tarafı yok. Vercel ayarları `vercel.json` içinde hazır.
 
 [![Vercel'e Dağıt](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Feveryoneexe%2Fcanakkale-1915)
@@ -208,6 +210,14 @@ vercel --prod
 
 `npm run build` önce `tsc --noEmit` çalıştırır; tip hatası varsa dağıtım
 başarısız olur. Bu kasıtlıdır.
+
+### Her push'ta otomatik dağıtım
+
+`vercel git connect` komutu, Vercel hesabınızda bir **GitHub Login
+Connection** tanımlı değilse `400` ile başarısız olur. Tek seferlik çözüm:
+Vercel panelinde *Settings → Git → Connect Git Repository* ile depoyu bağlayın
+(ya da hesaba GitHub ile giriş yöntemi ekleyin). Bağlandıktan sonra `main`
+dalına her push üretime çıkar.
 
 Netlify / GitHub Pages / herhangi bir statik barındırıcı da çalışır — tek
 gereken `dist/` klasörünü servis etmek. `vite.config.ts` içinde `base: './'`
