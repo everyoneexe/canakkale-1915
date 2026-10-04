@@ -157,25 +157,37 @@ türetmek hem çalıştı hem de rölyefle %100 tutarlı sonuç verdi.
   geliyordu; ön gölgelendirilmiş WebP 550 KB.
 * **Çözünürlük kademeleri (LOD)**: tek bir dünya dokusu 11 px/derece, yani
   ~10 km/piksel — tiyatronun dışında yakınlaştırınca bulanık bir leke.
-  `tools/world/build_lod.py` terrarium karolarından iki ara kademe üretir ve
-  kaba → ince sırayla üst üste serilir:
+  `tools/world/build_lod.py` terrarium karolarından iki ara kademe üretir;
+  kaba → ince sırayla üst üste serilir, **en ince veri kazanır**:
 
-  | kademe | çözünürlük | kapsam |
-  | --- | --- | --- |
-  | `world-relief` | 11 px/° (~10 km) | tüm dünya |
-  | `lod-region` | 91 px/° (~1,2 km) | Osmanlı coğrafyası |
-  | `lod-near` | 364 px/° (~305 m) | Ege + Marmara |
-  | tiyatro | 1240 px/° (~29 m) | Çanakkale |
+  | kademe | çözünürlük | kapsam | nasıl |
+  | --- | --- | --- | --- |
+  | `world-relief` | 11 px/° (~10 km) | tüm dünya | paket |
+  | `lod-region` | 91 px/° (~1,2 km) | Osmanlı coğrafyası | paket, 2,0 MB |
+  | `lod-near` | 364 px/° (~305 m) | Ege + Marmara | paket, 1,1 MB |
+  | tiyatro | ~2900 px/° (~29 m) | Çanakkale | paket, tarayıcıda boyanır |
+  | akan karo | ~5800 px/° (~11 m) | görünen pencere | **canlı indirilir** |
 
-  Gölge sertliği piksel boyutundan **bağımsız** tutulur: `np.gradient` piksel
-  başına Δyükseklik verir, çözünürlük arttıkça küçülür ve aynı yamaç ince
-  kademede sönük çıkardı. Gerçek eğime (metre/metre) sabit `K = 111320·zs /
-  (px/derece)` uygulanır, böylece kademe sınırlarında parlaklık dikişi olmaz.
-  Tiyatro rölyefi de aynı rampaya çekildi — önceden ortada koyu bir
-  dikdörtgen olarak duruyordu.
-* **Zoom'a bağlı puslandırma**: tiyatro kadrajında dünya kademeleri soluk bir
-  uzaklık pusu (alpha 0,34); geriye çekilince tam parlaklığa çıkar. Hepsi tek
-  konteynerde olduğu için aralarında parlaklık farkı oluşmaz.
+* **Karo akışı** (`src/render/tiles.ts`): statik kademeler de bir yerde
+  tükeniyor. Zoom 728 px/dereceyi geçince görünen pencerenin terrarium
+  karoları AWS'den indirilir, **tek mozaiğe** dizilir ve öyle gölgelendirilir
+  — karo başına ayrı sprite yapmak tepe gölgelemesine komşu piksel bırakmaz
+  ve sınırlarda 1 px'lik ızgara çizgileri oluşturur. Mozaik tek doku, tek
+  çizim çağrısı. İş zoom/kaydırma durulduktan 220 ms sonra bir kez yapılır;
+  çözülmüş karolar bellekte tutulur (1400 karo tavanı). Zoom geri çekilince
+  katman kendini temizler.
+* **Gölge sertliği** çözünürlükle ölçeklenir ama doğrusal değil. `np.gradient`
+  piksel başına Δyükseklik verir; hiç telafi edilmezse aynı yamaç ince
+  kademede sönük çıkar. Tam telafi ters uca savurur: 10 km/piksel veride
+  %0,5 ölçülen bir yamaç 11 m/piksel veride gerçek %30 eğimini gösterir,
+  çarpan sabit kalınca gölge doyar ve arazi kumlu bir kabartmaya döner.
+  Ara yol `zs = 0,04 · (px/derece ÷ 11,378)^0{,}18` — komşu kademeler
+  arasında ~1,3 kat fark kalır: ne dikiş görünür, ne doygunluk. Tiyatro
+  rölyefi de aynı yasaya ve aynı renk rampasına çekildi; önceden kendi
+  sabitlerini kullanıyor ve ortada koyu bir dikdörtgen olarak duruyordu.
+* **Azami yakınlık veriye bağlı**: `fit × 12` ≈ 7 m/ekran pikseli. Önceki
+  `fit × 42` (≈ 2 m/px) hiçbir katmanın desteklemediği bir yakınlıktı ve
+  her şey bulanıktı.
 * **Küre**: WebGL2 ile ortografik küre ışın-izi. Ekran dörtgenine bir
   fragman gölgelendirici çizilir; her piksel için ters ortografik izdüşümle
   enlem/boylam bulunup arazi ve siyasi maske dokuları örneklenir. Tek çizim

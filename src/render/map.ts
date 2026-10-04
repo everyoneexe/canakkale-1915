@@ -23,6 +23,7 @@ import {
 import { C, LAYER } from '../style/tokens.ts';
 import { fortRange, liveShips, minefieldsIn } from '../engine/naval.ts';
 import { TERRAINS } from '../data/units.ts';
+import { TerrainTiles, zscale } from './tiles.ts';
 import lodMeta from '../data/lod.json';
 
 /** Bölgesel rölyef kademeleri — `tools/world/build_lod.py` üretir. */
@@ -130,8 +131,10 @@ export class MapView {
   private zoom = 1;
   /** Açılış kadrajındaki yakınlaştırma — zoom sınırları buna göre. */
   private fitZoom = 1;
-  /** Tiyatronun arkasındaki dünya kademeleri; görünürlüğü zoom'a bağlı. */
+  /** Tiyatronun arkasındaki statik dünya kademeleri. */
   private gWorld = new Container();
+  /** Derin yakınlaştırmada canlı indirilen arazi; yalnız Çanakkale'de. */
+  private tiles: TerrainTiles | null = null;
   private panX = 0;
   private panY = 0;
   private hovered: ProvinceId | null = null;
@@ -263,11 +266,17 @@ export class MapView {
       // (yükseklik/500, ×0,78) kullanıyordu ve tiyatro, çevresindeki LOD
       // dokusunun ortasında koyu bir dikdörtgen olarak duruyordu.
       //
-      // Gölge sertliği piksel boyutundan bağımsız tutulur: `build_lod.py`
-      // ile aynı K sabiti, gerçek eğime (metre/metre) uygulanır.
-      const K = (111320 * 0.04) / (4096 / 360);
+      // Gölge sertliği `tiles.ts:zscale` ile aynı yasaya tabi.
       const mppX = (box.maxX - box.minX) / w;
       const mppY = (box.maxY - box.minY) / h;
+      // `zscale` derece ızgarası varsayar; tiyatro ızgarası metre cinsinden.
+      // Çevrim: px/derece = (derece başına metre) / (piksel başına metre).
+      const coslat = Math.cos((gameMap().origin.lat * Math.PI) / 180);
+      const kxBox = coslat * 111320;
+      const zs = zscale(kxBox / mppX);
+      // Eşit metreli ızgarada boylam yönünde derece başına piksel enlemdekinin
+      // cos(enlem) katı; y gradyanı bu oranla hizalanır.
+      const yAdj = (kxBox * mppY) / (mppX * 110574);
       const SUN = { x: -0.72, y: -0.6, z: 0.35 };
       for (let y = 0; y < h; y++) {
         for (let x = 0; x < w; x++) {
@@ -281,8 +290,8 @@ export class MapView {
           const gy =
             (elev[y < h - 1 ? px + w : px]! - elev[y > 0 ? px - w : px]!) /
             (y > 0 && y < h - 1 ? 2 : 1);
-          const dx = (K * gx) / mppX;
-          const dy = (K * gy) / mppY;
+          const dx = (gx * zs) / coslat;
+          const dy = gy * zs * yAdj;
           const ln = Math.sqrt(dx * dx + dy * dy + 1);
           const shade = Math.max(
             0.42,
@@ -311,12 +320,12 @@ export class MapView {
     //   world-relief   11 px/°   (~10 km)   tüm dünya
     //   lod-region     91 px/°   (~1,2 km)  Osmanlı coğrafyası
     //   lod-near      364 px/°   (~305 m)   Ege + Marmara
-    //   tiyatro      1240 px/°   (~29 m)    Çanakkale — en üstte
+    //   tiyatro      2940 px/°   (~29 m)    Çanakkale
+    //
+    //   akan karo  ~5800 px/°  (~11 m)    görünen pencere, canlı indirilir
     //
     // Hepsi aynı gölgelendirme dilinde üretildiği için kademe sınırları
-    // görünmez; tek fark keskinlik. Tümü `gWorld` içinde durur, böylece
-    // zoom'a bağlı puslandırma hepsine BİRLİKTE uygulanır ve aralarında
-    // parlaklık dikişi oluşmaz.
+    // görünmez; tek fark keskinlik.
     if (mapKind() === 'canakkale') {
       const o = gameMap().origin;
       const kx = Math.cos((o.lat * Math.PI) / 180) * 111320;
@@ -340,7 +349,6 @@ export class MapView {
       );
 
       this.gRelief.addChild(this.gWorld);
-      this.tuneWorldBack();
     }
 
     const sprite = new Sprite(source);
@@ -349,6 +357,17 @@ export class MapView {
     sprite.width = box.maxX - box.minX;
     sprite.height = box.maxY - box.minY;
     this.gRelief.addChild(sprite);
+
+    // Akan katman EN ÜSTTE — tiyatro rölyefinin de üstünde. Tiyatro dokusu
+    // 29 m/piksel, akan terrarium karoları 11 m/piksel: azami yakınlıkta
+    // oyun alanı, çevresindeki akan araziden daha bulanık kalıyordu. LOD
+    // sözleşmesi tek: en ince veri kazanır. Akış yalnız 728 px/derecenin
+    // ötesinde devreye girer, altında kendini temizler ve tiyatro dokusu
+    // yeniden görünür olur.
+    if (mapKind() === 'canakkale') {
+      this.tiles = new TerrainTiles(this.gRelief, gameMap().origin);
+      this.streamTerrain();
+    }
   }
 
   /**
@@ -461,31 +480,38 @@ export class MapView {
     this.applyTransform();
   }
 
-  /**
-   * Dünya zemini zoom'a göre açılır.
-   *
-   * Tiyatroya yakınken düşük çözünürlüklü dünya dokusu detaylı rölyefle
-   * yarışmamalı: soluk bir uzaklık pusu olarak kalır. Oyuncu geriye
-   * çekildiğinde ise asıl gösterilecek şey odur, bu yüzden tam parlaklığa
-   * çıkar. Aksi hâlde uzaklaştırınca ekran kapkara kalıyordu.
-   */
-  private tuneWorldBack(): void {
-    const b = this.gWorld;
-    if (b.children.length === 0) return;
-    // r = 1 tiyatro kadrajı, r < 1 geriye çekilmiş.
-    const r = this.zoom / this.fitZoom;
-    // log ölçekte 1.0 -> puslu, 0.22 -> tam dünya.
-    const k = Math.min(1, Math.max(0, Math.log(1 / r) / Math.log(1 / 0.22)));
-    const e = k * k * (3 - 2 * k);
-    b.alpha = 0.34 + e * 0.66;
-    const g = Math.round(0x6e + e * (0xff - 0x6e));
-    b.tint = (g << 16) | (g << 8) | g;
-  }
-
   private applyTransform(): void {
-    this.tuneWorldBack();
     this.world.scale.set(this.zoom);
     this.world.position.set(this.panX, this.panY);
+    this.streamTerrain();
+  }
+
+  /**
+   * Görünen pencereyi karo akışına bildirir.
+   *
+   * Statik kademeler en çok 364 px/derece veriyor; derin yakınlaştırmada
+   * tükeniyor ve arazi bulanık bir lekeye dönüşüyordu. `TerrainTiles` bu
+   * noktadan sonra devreye girip pencereyi canlı indirir. Çağrı her karede
+   * gelebilir: içeride durulma beklenir.
+   */
+  private streamTerrain(): void {
+    const t = this.tiles;
+    if (!t) return;
+    const o = gameMap().origin;
+    const kx = Math.cos((o.lat * Math.PI) / 180) * 111320;
+    const ky = 110574;
+    const a = this.toWorld(0, 0);
+    const b = this.toWorld(this.app.screen.width, this.app.screen.height);
+    t.request(
+      {
+        west: o.lon + a.x / kx,
+        east: o.lon + b.x / kx,
+        north: o.lat - a.y / ky,
+        south: o.lat - b.y / ky,
+      },
+      // Ekranda boylam derecesi başına piksel.
+      this.zoom * kx,
+    );
   }
 
   private toWorld(sx: number, sy: number): Vec2 {
@@ -506,7 +532,11 @@ export class MapView {
         // Aşağı sınır bol: oyuncu geriye çekilip tiyatronun dünyadaki
         // yerini görebilmeli.
         const lo = this.fitZoom * 0.04;
-        const hi = this.fitZoom * 42;
+        // Üst sınır VERİYE bağlı. fit×42 ≈ 2 m/ekran pikseli demekti;
+        // tiyatro dokusu 29 m/px, akan terrarium karoları en iyi 11 m/px.
+        // O yakınlıkta her katman bulanık bir lekeydi. fit×12 ≈ 7 m/px:
+        // tiyatro ~4 kat, akan karo ~1,6 kat büyütülür — ikisi de okunur.
+        const hi = this.fitZoom * 12;
         this.zoom = Math.min(hi, Math.max(lo, this.zoom * k));
         const after = this.toWorld(e.offsetX, e.offsetY);
         this.panX += (after.x - before.x) * this.zoom;

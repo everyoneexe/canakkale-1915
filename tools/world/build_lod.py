@@ -85,17 +85,26 @@ def lat2tiley(lat: float, n: int) -> float:
     return (1.0 - math.asinh(math.tan(r)) / math.pi) / 2.0 * n
 
 
-# Gölgelendirme sertliği piksel boyutundan BAĞIMSIZ olmalı. `np.gradient`
-# piksel başına Δyükseklik verir; çözünürlük arttıkça bu küçülür, yani aynı
-# yamaç ince kademede sönük çıkar ve kademe sınırında parlaklık dikişi olur.
-# Gerçek eğime (metre/metre) sabit bir katsayı uygulanır:
+# Gölge sertliği çözünürlükle ÖLÇEKLENİR, ama doğrusal değil.
 #
-#     dx = K · Δyükseklik/Δmetre,   K = 111320 · zs / (px/derece)
+# `np.gradient` piksel başına Δyükseklik verir; çözünürlük arttıkça küçülür.
+# Hiç telafi edilmezse aynı yamaç ince kademede sönük çıkar. Tam telafi
+# (zs ∝ px/derece) ise ters uca savuruyor: 10 km/piksel veride %0,5 ölçülen
+# bir yamaç 11 m/piksel veride gerçek %30 eğimini gösterir, çarpan sabit
+# kalınca gölge tamamen doyar ve arazi kumlu bir kabartmaya dönüşür.
 #
-# `build_world.py` 4096 px / 360° = 11,378 px/derece ve zs = 0,04 kullanıyor.
-# Referans K'yi oradan al, her kademe için zs'yi yeniden çöz.
+# Ara yol — üs 0,18:
+#
+#     zs = 0,04 · (px/derece ÷ 11,378)^0,18
+#
+# Komşu kademeler arasında ~2 kat fark kalır: ne dikiş görünür, ne doygunluk.
 REF_PX_PER_DEG = 4096.0 / 360.0
 REF_ZS = 0.04
+ZS_EXP = 0.18
+
+
+def zscale(px_per_deg: float) -> float:
+    return REF_ZS * (px_per_deg / REF_PX_PER_DEG) ** ZS_EXP
 
 
 def shade_rgb(
@@ -106,7 +115,7 @@ def shade_rgb(
     gy, gx = np.gradient(elev)
     lat_rows = np.linspace(lat_n, lat_s, h)
     coslat = np.clip(np.cos(np.radians(lat_rows)), 0.08, 1.0)[:, None]
-    zs = REF_ZS * px_per_deg / REF_PX_PER_DEG
+    zs = zscale(px_per_deg)
     dx = gx * zs / coslat
     dy = gy * zs
     ln = np.sqrt(dx * dx + dy * dy + 1.0)
