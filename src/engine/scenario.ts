@@ -15,7 +15,7 @@ import type {
   VictoryRules,
 } from '../core/types.ts';
 import { SIDE_OF_NATION } from '../core/types.ts';
-import { MAP, makeProjection, prov, provinceAt } from '../core/geo.ts';
+import { gameMap, makeProjection, prov, provinceAt, provinces } from '../core/geo.ts';
 import { FORT_AMMO_PER_HEAVY_GUN, FORT_AMMO_PER_LIGHT_GUN, FORTS, HEAVY_CALIBRE } from '../data/forts.ts';
 import { GUN_BY_ID } from '../data/guns.ts';
 import { MINEFIELDS } from '../data/minefields.ts';
@@ -48,7 +48,12 @@ export function formatDate(iso: string): string {
   return `${d.getUTCDate()} ${TR_MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
 }
 
-const PROJ = makeProjection(MAP.origin);
+// Modül düzeyinde KURULAMAZ: harita henüz yüklenmemiş olabilir.
+let projCache: ReturnType<typeof makeProjection> | null = null;
+function proj() {
+  projCache ??= makeProjection(gameMap().origin);
+  return projCache;
+}
 
 /** Tabya mühimmatı: ağır namlular az, hafifler bol atış taşır. */
 function fortAmmo(guns: Readonly<Record<string, number>>): number {
@@ -64,7 +69,7 @@ function fortAmmo(guns: Readonly<Record<string, number>>): number {
 function buildForts(): Record<string, Fort> {
   const out: Record<string, Fort> = {};
   for (const f of FORTS) {
-    const pos = PROJ.toMetres(f.lon, f.lat);
+    const pos = proj().toMetres(f.lon, f.lat);
     const province = provinceAt(pos);
     if (!province) throw new Error(`${f.id} tabyası hiçbir ile düşmüyor`);
     const ammo = fortAmmo(f.guns);
@@ -96,8 +101,8 @@ function buildForts(): Record<string, Fort> {
 function buildMinefields(): Record<string, Minefield> {
   const out: Record<string, Minefield> = {};
   for (const m of MINEFIELDS) {
-    const from = PROJ.toMetres(m.from[0], m.from[1]);
-    const to = PROJ.toMetres(m.to[0], m.to[1]);
+    const from = proj().toMetres(m.from[0], m.from[1]);
+    const to = proj().toMetres(m.to[0], m.to[1]);
     const mid = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
     const province = provinceAt(mid);
     if (!province) throw new Error(`${m.id} mayın hattı hiçbir ile düşmüyor`);
@@ -236,7 +241,7 @@ function buildAir() {
 
 function buildProvinceStates(): Record<string, ProvinceState> {
   const out: Record<string, ProvinceState> = {};
-  for (const p of MAP.provinces) {
+  for (const p of provinces()) {
     const owner = p.startOwner;
     out[p.id] = {
       owner,
@@ -285,7 +290,34 @@ const VICTORY: VictoryRules = {
   lastDay: dayOf(END_DATE),
 };
 
-export const SCENARIO: Scenario = {
+/**
+ * Senaryo artık modül yüklenirken KURULAMAZ: harita çalışma zamanında
+ * seçiliyor (Çanakkale 1915 / Dünya 1914) ve `gameMap()` yüklenmeden
+ * çağrılırsa hata veriyor. Bu yüzden tembel kurulum.
+ */
+let cached: Scenario | null = null;
+
+/** Dışarıdan atanan senaryo (dünya 1914). Boşsa Çanakkale kurulur. */
+let active: Scenario | null = null;
+
+export function scenario(): Scenario {
+  if (active) return active;
+  cached ??= buildScenario();
+  return cached;
+}
+
+/** Oynanacak senaryoyu seç. `null` -> Çanakkale 1915. */
+export function setActiveScenario(s: Scenario | null): void {
+  active = s;
+}
+
+/** Harita değiştiğinde önbelleği boşalt. */
+export function resetScenario(): void {
+  cached = null;
+}
+
+function buildScenario(): Scenario {
+  return {
   id: 'canakkale_1915',
   name: 'Çanakkale 1915',
   desc:
@@ -294,7 +326,7 @@ export const SCENARIO: Scenario = {
   startDate: START_DATE,
   endDate: END_DATE,
   playerSide: 'ottoman',
-  map: MAP,
+  map: gameMap(),
   templates: TEMPLATES,
   landUnits: [...OTTOMAN_LAND, ...ENTENTE_LAND].map((u) => ({
     ...u,
@@ -318,7 +350,8 @@ export const SCENARIO: Scenario = {
   })),
   sides: SIDES,
   victory: VICTORY,
-};
+  };
+}
 
 /** Yeni oyun durumu. */
 export function newGame(playerSide: Side = 'ottoman', seed = 19150318): GameState {
@@ -326,7 +359,7 @@ export function newGame(playerSide: Side = 'ottoman', seed = 19150318): GameStat
   const fleets = buildFleets();
 
   // Takviyeler sahada değil: varış gününe kadar sahneden çıkarılır.
-  for (const u of SCENARIO.landUnits) {
+  for (const u of scenario().landUnits) {
     if (u.arrivesOn !== undefined && u.arrivesOn > 0) {
       const unit = landUnits[u.id];
       if (unit) unit.embarkedIn = 'bekleme';

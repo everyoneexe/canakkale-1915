@@ -90,8 +90,11 @@ export interface Province {
   readonly labelled: boolean;
   readonly isSea: boolean;
   readonly terrain: Terrain;
-  /** Metre cinsinden ağırlık merkezi. */
+  /** Çizim uzayında ağırlık merkezi (metre). */
   readonly center: Vec2;
+  /** Coğrafi merkez — GERÇEK mesafeler buradan hesaplanır (haversine). */
+  readonly lon: number;
+  readonly lat: number;
   /** Dış sınır halkası, metre, saat yönünde. */
   readonly polygon: readonly Vec2[];
   /** Kara için ortalama rakım (m). Deniz için ortalama derinlik negatif (m). */
@@ -636,12 +639,20 @@ export interface ScenarioAirWing {
 }
 
 export interface VictoryRules {
+  /**
+   * Taraf başına KORUNMASI gereken başkentler. Bir taraf karşı tarafın
+   * bütün başkentlerini ele geçirirse savaşı kazanır. Çanakkale'de boştur;
+   * dünya senaryosunun asıl zafer koşulu budur.
+   */
+  readonly capitals?: Readonly<Record<Side, readonly ProvinceId[]>>;
   /** Entente bu illerin hepsini ele geçirirse boğaz zorlandı sayılır. */
   readonly ententeStraitProvinces: readonly ProvinceId[];
   /** Entente bu kadar büyük gemi kaybederse filo çekilir. */
   readonly ententeCapitalShipLimit: number;
   /** Osmanlı bu illeri kaybederse yarımada düşer. */
   readonly ottomanMustHold: readonly ProvinceId[];
-  /** Son güne kadar dayanırsa Osmanlı kazanır. */
+  /** Son güne kadar kimse kazanamazsa savaşı kazanan taraf. */
   readonly lastDay: DayIndex;
+  readonly lastDayWinner?: Side;
+  readonly lastDayReason?: string;
 }

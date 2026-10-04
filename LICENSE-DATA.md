@@ -8,14 +8,17 @@ gerekir.
 
 ## 1. Harita verisi — ODbL (türetilmiş veritabanı)
 
-**Kapsam:** `src/data/map.json`, `public/relief.png`
+**Kapsam:** `src/data/map.json`, `public/relief.png`, `src/data/world.json`,
+`src/data/globe.json`, `public/world-relief.webp`
 
 Bu dosyalar iki kaynaktan **türetilmiş bir veritabanıdır**:
 
 | Kaynak | Ne alındı | Lisans |
 | --- | --- | --- |
 | [OpenStreetMap](https://www.openstreetmap.org/copyright) / [Nominatim](https://nominatim.openstreetmap.org/) | Yer adı ve tabya koordinatları (`tools/data/places.json`, `forts_geo.json` üzerinden il tohumları) | **ODbL 1.0** |
-| [AWS Terrain Tiles](https://registry.opendata.aws/terrain-tiles/) (terrarium, z12) | Yükseklik ızgarası, kıyı çizgisi, tepe gölgelemesi | Karma — aşağıya bakın |
+| [AWS Terrain Tiles](https://registry.opendata.aws/terrain-tiles/) (terrarium, z12 + z5) | Yükseklik ızgarası, kıyı çizgisi, tepe gölgelemesi | Karma — aşağıya bakın |
+| [Natural Earth](https://www.naturalearthdata.com/) 10m admin-1 ve deniz çokgenleri | Dünya haritasının 4.575 ili ve deniz adları | **Kamu malı** |
+| [aourednik/historical-basemaps](https://github.com/aourednik/historical-basemaps) `world_1914`, `world_1938` | 1914 ve 1938 devlet sınırları | **CC BY-SA 4.0** |
 
 OSM verisi ODbL kapsamında olduğundan ve il sınırları OSM koordinatlarından
 tohumlandığından, **türetilmiş veritabanı da ODbL ile dağıtılır.** Yani:
@@ -24,6 +27,11 @@ tohumlandığından, **türetilmiş veritabanı da ODbL ile dağıtılır.** Yan
 * Bu veriyi değiştirip dağıtırsanız, değiştirilmiş veritabanını da **ODbL ile**
   yayımlamanız gerekir.
 * ODbL metni: <https://opendatacommons.org/licenses/odbl/1-0/>
+
+**Tarihsel sınırlar CC BY-SA 4.0'dır.** `world.json` ve `globe.json`
+aourednik/historical-basemaps verisinden türetilmiş sınır bilgisi taşır;
+bu dosyaları değiştirip dağıtırsanız CC BY-SA 4.0 koşulları da geçerlidir.
+Atıf: *"Tarihsel sınırlar © aourednik/historical-basemaps, CC BY-SA 4.0"*
 
 Oyun bu atfı açılış ekranında ve bu dosyada yapar.
 
@@ -107,4 +115,5 @@ Google Fonts üzerinden CDN ile yüklenir; depoda font dosyası yoktur.
 | --- | --- |
 | `src/**` (map.json hariç), `tools/**`, `test/**` | MIT |
 | `src/data/map.json`, `public/relief.png` | **ODbL 1.0** |
+| `src/data/world.json`, `globe.json`, `public/world-relief.webp` | **ODbL 1.0 + CC BY-SA 4.0** (sınırlar) |
 | Tarihsel olgular | Telifsiz; kaynaklar `src` alanlarında |

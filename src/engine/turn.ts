@@ -8,7 +8,7 @@ import type {
   Side,
   Weather,
 } from '../core/types.ts';
-import { MAP, prov, provinceDist } from '../core/geo.ts';
+import { prov, provinceDist, provinces } from '../core/geo.ts';
 import { TERRAINS, WEATHERS } from '../data/units.ts';
 import {
   commanderMods,
@@ -28,7 +28,7 @@ import {
 } from './naval.ts';
 import { repairAir, resolveAir } from './air.ts';
 import { accrueResources, applySupply } from './supply.ts';
-import { SCENARIO, isoOf } from './scenario.ts';
+import { isoOf, scenario } from './scenario.ts';
 import { planAi } from './ai.ts';
 import { Rng } from './rng.ts';
 
@@ -130,7 +130,7 @@ export function endTurn(state: GameState): TurnResult {
   updateVisibility(state);
 
   state.day += 1;
-  state.date = isoOf(state.day);
+  state.date = isoOf(state.day, scenario().startDate);
   arriveReinforcements(state);
   fireEvents(state);
   checkVictory(state);
@@ -469,42 +469,56 @@ function resolveLandings(state: GameState, rng: Rng): CombatReport[] {
 // ──────────────────────────────────────────────────────── görüş ────────
 
 function updateVisibility(state: GameState): void {
+  // İl başına bütün birlik ve filoları taramak 4.575 × 643 = 2,9 milyon
+  // karşılaştırma + her ilde iki dizi tahsisi demekti; tur süresinin yarısı
+  // buradaydı. Varlık kümeleri tur başında TEK geçişte kurulur.
+  const presence: Record<Side, Set<ProvinceId>> = {
+    ottoman: new Set(),
+    entente: new Set(),
+  };
+  for (const u of Object.values(state.landUnits)) {
+    if (u.embarkedIn || u.strength <= 0) continue;
+    presence[u.side].add(u.location);
+  }
+  for (const f of Object.values(state.fleets)) {
+    presence[f.side].add(f.location);
+  }
+
   for (const side of ['ottoman', 'entente'] as const) {
-    for (const p of MAP.provinces) {
-      const st = state.provinces[p.id]!;
-      const mine =
-        st.controller === side ||
-        Object.values(state.landUnits).some(
-          (u) => u.side === side && u.location === p.id && !u.embarkedIn,
-        ) ||
-        Object.values(state.fleets).some((f) => f.side === side && f.location === p.id);
-      // Komşuluktan da görülür.
-      const adjacent = p.neighbours.some((n) => {
-        const ns = state.provinces[n];
-        return (
-          ns?.controller === side ||
-          Object.values(state.fleets).some((f) => f.side === side && f.location === n)
-        );
-      });
-      if (mine || adjacent) {
-        st.seen[side] = true;
-        st.lastSeen[side] = state.day;
-      }
+    const mine = presence[side];
+    const seen = new Set<ProvinceId>();
+    for (const p of provinces()) {
+      if (state.provinces[p.id]?.controller === side) seen.add(p.id);
+    }
+    for (const id of mine) seen.add(id);
+    // Komşuluktan görüş: yalnız görülen illerin komşularına bak.
+    const adjacent: ProvinceId[] = [];
+    for (const id of seen) {
+      for (const nb of prov(id).neighbours) adjacent.push(nb);
+    }
+    for (const id of adjacent) seen.add(id);
+
+    for (const id of seen) {
+      const st = state.provinces[id];
+      if (!st) continue;
+      st.seen[side] = true;
+      st.lastSeen[side] = state.day;
     }
   }
 }
 
+
 // ─────────────────────────────────────── takviye, olay, zafer ──────────
 
 function arriveReinforcements(state: GameState): void {
-  for (const u of SCENARIO.landUnits) {
+  for (const u of scenario().landUnits) {
     if (u.arrivesOn === undefined || u.arrivesOn !== state.day) continue;
     const unit = state.landUnits[u.id];
     if (!unit) continue;
     unit.embarkedIn = null;
     unit.location = u.location;
   }
-  for (const a of SCENARIO.airWings) {
+  for (const a of scenario().airWings) {
     if (a.arrivesOn === undefined || a.arrivesOn !== state.day) continue;
     const wing = state.airWings[a.id];
     if (wing) wing.planes = wing.maxPlanes;
@@ -512,7 +526,7 @@ function arriveReinforcements(state: GameState): void {
 }
 
 function fireEvents(state: GameState): void {
-  for (const e of SCENARIO.events) {
+  for (const e of scenario().events) {
     if (e.day !== state.day || state.firedEvents.includes(e.id)) continue;
     state.firedEvents.push(e.id);
     state.pendingEvents.push(e);
@@ -536,11 +550,34 @@ export function applyEffect(state: GameState, effect: EventEffect): void {
 }
 
 function checkVictory(state: GameState): void {
-  const v = SCENARIO.victory;
+  const v = scenario().victory;
 
-  const straitForced = v.ententeStraitProvinces.every(
-    (id) => state.provinces[id]?.controller === 'entente',
-  );
+  // ── Simetrik başkent koşulu (dünya senaryosu) ────────────────────
+  // Çanakkale'de `capitals` tanımsızdır ve bu blok atlanır.
+  if (v.capitals) {
+    for (const attacker of ['ottoman', 'entente'] as const) {
+      const defender: Side = attacker === 'ottoman' ? 'entente' : 'ottoman';
+      const targets = v.capitals[defender];
+      if (targets.length === 0) continue;
+      const taken = targets.filter(
+        (id) => state.provinces[id]?.controller === attacker,
+      );
+      if (taken.length === targets.length) {
+        state.outcome = {
+          winner: attacker,
+          reason:
+            `${attacker === 'ottoman' ? 'İttifak' : 'İtilaf'} karşı bloğun bütün ` +
+            `başkentlerini ele geçirdi.`,
+          day: state.day,
+        };
+        return;
+      }
+    }
+  }
+
+  const straitForced =
+    v.ententeStraitProvinces.length > 0 &&
+    v.ententeStraitProvinces.every((id) => state.provinces[id]?.controller === 'entente');
   if (straitForced) {
     state.outcome = {
       winner: 'entente',
@@ -565,7 +602,7 @@ function checkVictory(state: GameState): void {
   const mustHoldLost = v.ottomanMustHold.filter(
     (id) => state.provinces[id]?.controller === 'entente',
   );
-  if (mustHoldLost.length === v.ottomanMustHold.length) {
+  if (v.ottomanMustHold.length > 0 && mustHoldLost.length === v.ottomanMustHold.length) {
     state.outcome = {
       winner: 'entente',
       reason: 'Kilitbahir platosu ve Çanakkale düştü; boğaz savunması çöktü.',
@@ -589,8 +626,10 @@ function checkVictory(state: GameState): void {
 
   if (state.day >= v.lastDay) {
     state.outcome = {
-      winner: 'ottoman',
-      reason: '9 Ocak 1916 — son İtilaf askeri Seddülbahir\'den ayrıldı. Çanakkale geçilmedi.',
+      winner: v.lastDayWinner ?? 'ottoman',
+      reason:
+        v.lastDayReason ??
+        '9 Ocak 1916 — son İtilaf askeri Seddülbahir\'den ayrıldı. Çanakkale geçilmedi.',
       day: state.day,
     };
   }
@@ -599,7 +638,7 @@ function checkVictory(state: GameState): void {
 /** Senaryo başındaki büyük gemi sayısıyla bugünkü farkı. */
 function countSunkCapitals(state: GameState): number {
   let start = 0;
-  for (const f of SCENARIO.fleets) {
+  for (const f of scenario().fleets) {
     if (f.nation === 'osmanli' || f.nation === 'alman') continue;
     for (const s of f.ships) {
       if (s.cls === 'dretnot' || s.cls === 'pre_dretnot' || s.cls === 'muharebe_kruvazoru') {

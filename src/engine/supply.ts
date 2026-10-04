@@ -1,5 +1,6 @@
 import type { GameState, ProvinceId, Side } from '../core/types.ts';
-import { MAP, prov, provinceDist } from '../core/geo.ts';
+import { mapKind, prov, provinceDist, provinces } from '../core/geo.ts';
+import { MinHeap } from '../core/heap.ts';
 import { commanderMods, templateStats } from './combat.ts';
 
 /**
@@ -14,10 +15,21 @@ import { commanderMods, templateStats } from './combat.ts';
  * cepheyi dar bir kara yolundan besledi.
  */
 
-/** Her kilometrede ikmal kapasitesi bu oranda azalır. */
-const DECAY_PER_KM = 0.016;
-/** Deniz üzerinden ikmal daha ucuzdur ama limana bağlıdır. */
-const SEA_DECAY_PER_KM = 0.006;
+/**
+ * Mesafeyle ikmal kaybı — HARİTA ÖLÇEĞİNE BAĞLI.
+ *
+ * Çanakkale tiyatrosu 60 km; orada km başına %1,6 kayıp doğru rakam
+ * (ikmal menzili ~60 km). Dünya haritasında aynı sabit ikmali Berlin'in
+ * 60 km dışında sıfırlıyordu: bütün ordular %9 ikmalle sahaya çıkıyor,
+ * hiçbiri taarruz edemiyor ve cephe ilk haftadan donuyordu.
+ *
+ * Dünya için menzil ~2.800 km kara / ~8.000 km deniz: demiryolu ve
+ * buharlı nakliye çağının gerçekçi derinliği.
+ */
+function decayPerKm(isSea: boolean): number {
+  if (mapKind() === 'dunya') return isSea ? 0.00012 : 0.00035;
+  return isSea ? 0.006 : 0.016;
+}
 
 export interface SupplySnapshot {
   /** il -> taraf başına ulaşan ikmal kapasitesi (adam/gün). */
@@ -36,7 +48,7 @@ function hasUnits(state: GameState, id: string, side: 'ottoman' | 'entente'): bo
 export function computeSupply(state: GameState): SupplySnapshot {
   const capacity: Record<ProvinceId, Record<Side, number>> = {};
   const demand: Record<ProvinceId, Record<Side, number>> = {};
-  for (const p of MAP.provinces) {
+  for (const p of provinces()) {
     capacity[p.id] = { ottoman: 0, entente: 0 };
     demand[p.id] = { ottoman: 0, entente: 0 };
   }
@@ -44,19 +56,21 @@ export function computeSupply(state: GameState): SupplySnapshot {
   for (const side of ['ottoman', 'entente'] as const) {
     // Dijkstra benzeri yayılım: en iyi kapasite kazanır.
     const best: Record<ProvinceId, number> = {};
-    const queue: { id: ProvinceId; cap: number }[] = [];
+    // Döngü içinde sort() O(n² log n) idi; 4.575 ilde tur süresinin diğer
+    // yarısı buradaydı. Kapasiteyi NEGATİF anahtarla min-yığına koyarak
+    // en yüksek kapasiteli düğümü O(log n)'de alıyoruz.
+    const queue = new MinHeap<{ id: ProvinceId; cap: number }>();
 
-    for (const p of MAP.provinces) {
+    for (const p of provinces()) {
       if (p.supplyHub <= 0) continue;
       if (state.provinces[p.id]?.controller !== side) continue;
       const cap = p.supplyHub;
       best[p.id] = cap;
-      queue.push({ id: p.id, cap });
+      queue.push({ id: p.id, cap }, -cap);
     }
 
-    while (queue.length > 0) {
-      queue.sort((a, b) => b.cap - a.cap);
-      const node = queue.shift()!;
+    while (queue.size > 0) {
+      const node = queue.pop()!;
       if ((best[node.id] ?? 0) > node.cap) continue;
       const here = prov(node.id);
       for (const nb of here.neighbours) {
@@ -79,12 +93,12 @@ export function computeSupply(state: GameState): SupplySnapshot {
           continue;
         }
         const km = provinceDist(node.id, nb) / 1000;
-        const decay = nbProv.isSea ? SEA_DECAY_PER_KM : DECAY_PER_KM;
+        const decay = decayPerKm(nbProv.isSea);
         const next = node.cap * Math.max(0, 1 - km * decay);
         if (next <= 50) continue;
         if (next > (best[nb] ?? 0)) {
           best[nb] = next;
-          queue.push({ id: nb, cap: next });
+          queue.push({ id: nb, cap: next }, -next);
         }
       }
     }
@@ -111,7 +125,7 @@ export function computeSupply(state: GameState): SupplySnapshot {
 export function applySupply(state: GameState): void {
   const { capacity, demand } = computeSupply(state);
 
-  for (const p of MAP.provinces) {
+  for (const p of provinces()) {
     const cap = capacity[p.id]!;
     const dem = demand[p.id]!;
     const st = state.provinces[p.id]!;

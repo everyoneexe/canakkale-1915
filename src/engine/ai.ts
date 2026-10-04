@@ -1,8 +1,9 @@
 import type { Fleet, GameState, LandUnit, ProvinceId, Side } from '../core/types.ts';
-import { MAP, findPath, prov } from '../core/geo.ts';
+import { findPath, mapKind, prov, provinces } from '../core/geo.ts';
 import { fleetSweepRate, fortsCovering, liveShips, minefieldsIn } from './naval.ts';
 import { effective } from './combat.ts';
 import { dayOf } from './scenario.ts';
+import { planWorldAi } from './world-ai.ts';
 import type { Rng } from './rng.ts';
 
 /**
@@ -59,6 +60,12 @@ const BEACHES: readonly ProvinceId[] = [
 ];
 
 export function planAi(state: GameState, rng: Rng): void {
+  // Aşağıdaki mantık Çanakkale il kimliklerine (boğaz ekseni, çıkarma
+  // sahilleri) gömülü; dünya haritasında topolojik yapay zekâ devreye girer.
+  if (mapKind() !== 'canakkale') {
+    planWorldAi(state, rng);
+    return;
+  }
   const ai: Side = state.playerSide === 'ottoman' ? 'entente' : 'ottoman';
   if (ai === 'entente') planEntente(state, rng);
   else planOttoman(state, rng);
@@ -387,7 +394,7 @@ function mostThreatened(state: GameState, side: Side, from: ProvinceId): Provinc
   const enemy: Side = side === 'ottoman' ? 'entente' : 'ottoman';
   let best: ProvinceId | null = null;
   let bestScore = 0;
-  for (const p of MAP.provinces) {
+  for (const p of provinces()) {
     if (p.isSea) continue;
     const st = state.provinces[p.id];
     if (st?.controller !== side) continue;

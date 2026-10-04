@@ -2,15 +2,24 @@ import {
   Application,
   Assets,
   Container,
-  FederatedPointerEvent,
   Graphics,
   Sprite,
   Text,
   TextStyle,
   Texture,
 } from 'pixi.js';
+import type { FederatedPointerEvent } from 'pixi.js';
 import type { GameState, Province, ProvinceId, Side, Vec2 } from '../core/types.ts';
-import { MAP, RELIEF_BOX, dist, pointInPolygon, prov } from '../core/geo.ts';
+import {
+  dist,
+  gameMap,
+  mapKind,
+  metaOf,
+  prov,
+  provinceAt,
+  provinces,
+  reliefBox,
+} from '../core/geo.ts';
 import { C, LAYER } from '../style/tokens.ts';
 import { fortRange, liveShips, minefieldsIn } from '../engine/naval.ts';
 import { TERRAINS } from '../data/units.ts';
@@ -19,6 +28,12 @@ import { TERRAINS } from '../data/units.ts';
  * Harita çizimi — @destanevreni'nin animasyonundaki görsel dil:
  * siyah zemin, neredeyse siyah lacivert deniz, haki kara, amber kıyı çizgisi,
  * mono büyük harf etiketler, kırmızı mayın noktaları, mavi-gri gemi işaretleri.
+ *
+ * ÖLÇEK NOTU: Çanakkale haritasında 47 il vardı ve her karede bütün çokgenleri
+ * yeniden kurmak bedavaydı. Dünya haritasında 4.575 il var; aynı yaklaşım
+ * karede ~115 bin köşe yeniden inşası demek ve kare hızı çöküyor. Bu yüzden
+ * il geometrisi BİR KEZ kurulur, her karede yalnızca `tint`/`alpha`/`visible`
+ * güncellenir.
  */
 
 export type MapMode = 'siyasi' | 'arazi' | 'tedarik' | 'deniz' | 'mayin';
@@ -39,24 +54,8 @@ export interface Selection {
 export interface MapCallbacks {
   onSelect(sel: Selection | null): void;
   onHover(sel: Selection | null, screen: { x: number; y: number }): void;
-  /** Emir hedefi seçildi (hedef bekleme kipindeyken tıklama). */
   onTarget(province: ProvinceId): void;
 }
-
-/** Açılış kadrajına dahil edilmeyen iller — uzak üsler ve açık deniz. */
-const OUT_OF_FRAME: ReadonlySet<string> = new Set([
-  'bozcaada',
-  'gokceada',
-  'd_ege_acik',
-  'd_gokceada_acigi',
-  'd_bozcaada_acigi',
-  'd_besike',
-  'd_saros',
-  'bolayir',
-  'lapseki',
-  'gelibolu',
-  'd_gelibolu_onu',
-]);
 
 const LABEL_STYLE = new TextStyle({
   fontFamily: 'JetBrains Mono, monospace',
@@ -81,40 +80,69 @@ const COUNTER_STYLE = new TextStyle({
   letterSpacing: 0.4,
 });
 
+/** Ekranda aynı anda gösterilecek azami etiket — fazlası okunmaz hâle geliyor. */
+const MAX_LABELS = 130;
+/** Aynı anda çizilecek azami birlik sayacı. */
+const MAX_COUNTERS = 90;
+
+interface ProvinceNode {
+  readonly province: Province;
+  readonly fill: Graphics;
+  readonly minX: number;
+  readonly minY: number;
+  readonly maxX: number;
+  readonly maxY: number;
+}
+
 export class MapView {
   readonly app = new Application();
 
   private world = new Container();
+  private gBackdrop = new Graphics();
   private gRelief = new Container();
-  private gFill = new Graphics();
-  private gEdge = new Graphics();
+  private gFillLayer = new Container();
+  private gBorders = new Graphics();
   private gCoast = new Graphics();
+  private gHighlight = new Graphics();
   private gMines = new Graphics();
   private gForts = new Graphics();
   private gPaths = new Graphics();
   private gUnits = new Container();
   private gLabels = new Container();
-  private gOverlay = new Graphics();
 
+  private nodes: ProvinceNode[] = [];
   private labelPool: Text[] = [];
   private counterPool: Container[] = [];
 
   mode: MapMode = 'siyasi';
   selection: Selection | null = null;
-  /** Emir hedefi bekleniyor — tıklama hedef seçer. */
   targeting = false;
-  /** Hedef seçimi için geçerli iller; boşsa hepsi. */
   validTargets: ReadonlySet<ProvinceId> = new Set();
 
   private state: GameState | null = null;
   private cb: MapCallbacks;
   private zoom = 1;
+  /** Açılış kadrajındaki yakınlaştırma — zoom sınırları buna göre. */
+  private fitZoom = 1;
   private panX = 0;
   private panY = 0;
   private hovered: ProvinceId | null = null;
   private dragging = false;
   private dragFrom = { x: 0, y: 0 };
   private dragMoved = 0;
+
+  // ── Hareket ───────────────────────────────────────────────────────
+  /** Kamera hedefi; her kare mevcut değere doğru yumuşatılır. */
+  private camTarget: { x: number; y: number; zoom: number } | null = null;
+  /** İl dolgularının hedef rengi/saydamlığı — mod değişiminde çapraz geçiş. */
+  private fillTarget = new Map<ProvinceId, { colour: number; alpha: number }>();
+  private fillNow = new Map<ProvinceId, { colour: number; alpha: number }>();
+  /** Birlik sayaçlarının yumuşatılmış ekran konumu (il değişince kayar). */
+  private counterPos = new Map<string, { x: number; y: number }>();
+  /** Muharebe parlaması: il -> kalan süre (0..1). */
+  private flash = new Map<ProvinceId, number>();
+  private lastFrame = 0;
+  private reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   constructor(cb: MapCallbacks) {
     this.cb = cb;
@@ -131,137 +159,214 @@ export class MapView {
       preference: 'webgl',
     });
 
+    this.gBackdrop.zIndex = LAYER.relief - 1;
     this.gRelief.zIndex = LAYER.relief;
-    this.gFill.zIndex = LAYER.provinceFill;
-    this.gEdge.zIndex = LAYER.provinceEdge;
+    this.gFillLayer.zIndex = LAYER.provinceFill;
+    this.gBorders.zIndex = LAYER.provinceEdge;
     this.gCoast.zIndex = LAYER.coast;
+    this.gHighlight.zIndex = LAYER.coast + 1;
     this.gMines.zIndex = LAYER.minefield;
     this.gForts.zIndex = LAYER.fort;
     this.gPaths.zIndex = LAYER.path;
     this.gUnits.zIndex = LAYER.unit;
     this.gLabels.zIndex = LAYER.label;
-    this.gOverlay.zIndex = LAYER.overlay;
-
-    // Rölyef dokusu yalnız indirilen yükseklik kutusunu kaplıyor; kadraj dışarı
-    // taştığında arkada saf siyah kalıyordu. Altına geniş bir deniz zemini serilir.
-    const backdrop = new Graphics();
-    const b = MAP.bounds;
-    const pad = Math.max(b.maxX - b.minX, b.maxY - b.minY);
-    backdrop
-      .rect(b.minX - pad, b.minY - pad, (b.maxX - b.minX) + pad * 2, (b.maxY - b.minY) + pad * 2)
-      .fill({ color: C.sea });
-    backdrop.zIndex = LAYER.relief - 1;
 
     this.world.sortableChildren = true;
     this.world.addChild(
-      backdrop,
+      this.gBackdrop,
       this.gRelief,
-      this.gFill,
-      this.gEdge,
+      this.gFillLayer,
+      this.gBorders,
       this.gCoast,
+      this.gHighlight,
       this.gMines,
       this.gForts,
       this.gPaths,
       this.gUnits,
       this.gLabels,
-      this.gOverlay,
     );
     this.app.stage.addChild(this.world);
 
-    await this.loadRelief();
-    this.fitToMap();
     this.bindInput(canvas);
     window.addEventListener('resize', () => this.fitToMap(true));
+
+    // Pixi'nin kendi tickerı kareyi sürer; animasyon burada ilerletilir.
+    this.app.ticker.add(() => this.tick());
+  }
+
+  /** Harita değiştiğinde çağrılır: geometriyi baştan kurar. */
+  async buildMap(): Promise<void> {
+    this.gRelief.removeChildren();
+    this.gFillLayer.removeChildren();
+    this.gLabels.removeChildren();
+    this.gUnits.removeChildren();
+    this.labelPool = [];
+    this.counterPool = [];
+    this.nodes = [];
+
+    const b = gameMap().bounds;
+    const pad = Math.max(b.maxX - b.minX, b.maxY - b.minY);
+    this.gBackdrop
+      .clear()
+      .rect(b.minX - pad, b.minY - pad, b.maxX - b.minX + pad * 2, b.maxY - b.minY + pad * 2)
+      .fill({ color: C.sea });
+
+    await this.loadRelief();
+    this.buildProvinceGeometry();
+    this.buildCoast();
+    this.fitToMap();
   }
 
   /**
-   * Rölyef dokusu: R/G kanalı yükseklik, B kanalı kara maskesi.
-   * Kanvasta videodaki haki rampasına çevrilir — GPU shader'a gerek yok,
-   * doku bir kez CPU'da boyanıp Sprite olarak kullanılır.
+   * Rölyef dokusu. Dünya haritası ÖN GÖLGELENDİRİLMİŞ gelir (Python'da
+   * boyanıp WebP olarak paketlendi) — tarayıcıda 7,6 milyon pikseli tek tek
+   * boyamak saniyeler sürüyordu. Çanakkale haritası ham yükseklik taşır ve
+   * burada boyanır; küçük olduğu için maliyeti önemsiz.
    */
   private async loadRelief(): Promise<void> {
-    const tex: Texture = await Assets.load('relief.png');
-    const src = tex.source.resource as HTMLImageElement | ImageBitmap;
-    const w = RELIEF_BOX.width;
-    const h = RELIEF_BOX.height;
-    const cv = document.createElement('canvas');
-    cv.width = w;
-    cv.height = h;
-    const ctx = cv.getContext('2d', { willReadFrequently: true })!;
-    ctx.drawImage(src as CanvasImageSource, 0, 0, w, h);
-    const img = ctx.getImageData(0, 0, w, h);
-    const d = img.data;
+    const box = reliefBox();
+    const tex: Texture = await Assets.load(box.image);
+    let source: Texture = tex;
 
-    // Yükseklikleri önce ayrı bir diziye çöz — tepe gölgelemesi için komşu
-    // piksellere bakmak gerekiyor, aynı tamponu hem okuyup hem yazamayız.
-    const elev = new Float32Array(w * h);
-    const landMask = new Float32Array(w * h);
-    for (let i = 0, px = 0; i < d.length; i += 4, px++) {
-      elev[px] = d[i]! * 256 + d[i + 1]! - 1000;
-      landMask[px] = d[i + 2]! / 255;
-    }
-
-    // Tepe gölgelemesi: kuzeybatıdan gelen ışık. Videodaki kara, düz bir haki
-    // leke değil; sırtlar ve dereler seçiliyor. Conkbayırı ile Kocaçimen'in
-    // Arıburnu'na nasıl hâkim olduğu ancak bununla okunuyor.
-    const SUN = { x: -0.72, y: -0.6, z: 0.35 };
-    const zScale = 2.6;
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        const px = y * w + x;
-        const i = px * 4;
-        if (landMask[px]! < 0.45) {
-          // Deniz — videodaki #030810. Kıyıya yaklaşınca bir tık açılır.
-          const t = landMask[px]! / 0.45;
-          d[i] = 3 + t * 5;
-          d[i + 1] = 8 + t * 8;
-          d[i + 2] = 16 + t * 12;
-          d[i + 3] = 255;
-          continue;
-        }
-        const xm = x > 0 ? px - 1 : px;
-        const xp = x < w - 1 ? px + 1 : px;
-        const ym = y > 0 ? px - w : px;
-        const yp = y < h - 1 ? px + w : px;
-        const dx = (elev[xp]! - elev[xm]!) * zScale;
-        const dy = (elev[yp]! - elev[ym]!) * zScale;
-        const len = Math.hypot(dx, dy, 120) || 1;
-        const shade = Math.max(
-          0.35,
-          Math.min(1.5, ((-dx * SUN.x - dy * SUN.y + 120 * SUN.z) / len) * 2.1),
-        );
-        // Taban renk: #1a1610 → #57411b (videodan örneklenen haki rampası).
-        const t = Math.min(1, Math.max(0, elev[px]!) / 500) ** 0.8;
-        // 0.78: videodaki kara, gölgelemeden sonra bu kadar koyu.
-        d[i] = Math.round(Math.min(255, (26 + t * 61) * shade * 0.78));
-        d[i + 1] = Math.round(Math.min(255, (22 + t * 43) * shade * 0.78));
-        d[i + 2] = Math.round(Math.min(255, (16 + t * 11) * shade * 0.8));
-        d[i + 3] = 255;
+    if (!box.preshaded) {
+      const w = box.width;
+      const h = box.height;
+      const cv = document.createElement('canvas');
+      cv.width = w;
+      cv.height = h;
+      const ctx = cv.getContext('2d', { willReadFrequently: true })!;
+      ctx.drawImage(tex.source.resource as CanvasImageSource, 0, 0, w, h);
+      const img = ctx.getImageData(0, 0, w, h);
+      const d = img.data;
+      const elev = new Float32Array(w * h);
+      const land = new Float32Array(w * h);
+      for (let i = 0, px = 0; i < d.length; i += 4, px++) {
+        elev[px] = d[i]! * 256 + d[i + 1]! - 1000;
+        land[px] = d[i + 2]! / 255;
       }
+      const SUN = { x: -0.72, y: -0.6, z: 0.35 };
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const px = y * w + x;
+          const i = px * 4;
+          if (land[px]! < 0.45) {
+            const t = land[px]! / 0.45;
+            d[i] = 3 + t * 5;
+            d[i + 1] = 8 + t * 8;
+            d[i + 2] = 16 + t * 12;
+            d[i + 3] = 255;
+            continue;
+          }
+          const dx = (elev[x < w - 1 ? px + 1 : px]! - elev[x > 0 ? px - 1 : px]!) * 2.6;
+          const dy = (elev[y < h - 1 ? px + w : px]! - elev[y > 0 ? px - w : px]!) * 2.6;
+          const len = Math.hypot(dx, dy, 120) || 1;
+          const shade = Math.max(
+            0.35,
+            Math.min(1.5, ((-dx * SUN.x - dy * SUN.y + 120 * SUN.z) / len) * 2.1),
+          );
+          const t = Math.min(1, Math.max(0, elev[px]!) / 500) ** 0.8;
+          d[i] = Math.round(Math.min(255, (26 + t * 61) * shade * 0.78));
+          d[i + 1] = Math.round(Math.min(255, (22 + t * 43) * shade * 0.78));
+          d[i + 2] = Math.round(Math.min(255, (16 + t * 11) * shade * 0.8));
+          d[i + 3] = 255;
+        }
+      }
+      ctx.putImageData(img, 0, 0);
+      source = Texture.from(cv);
     }
-    ctx.putImageData(img, 0, 0);
 
-    const sprite = new Sprite(Texture.from(cv));
-    sprite.x = RELIEF_BOX.minX;
-    sprite.y = RELIEF_BOX.minY;
-    sprite.width = RELIEF_BOX.maxX - RELIEF_BOX.minX;
-    sprite.height = RELIEF_BOX.maxY - RELIEF_BOX.minY;
+    const sprite = new Sprite(source);
+    sprite.x = box.minX;
+    sprite.y = box.minY;
+    sprite.width = box.maxX - box.minX;
+    sprite.height = box.maxY - box.minY;
     this.gRelief.addChild(sprite);
   }
 
   /**
-   * Açılış çerçevesi. Harita sınırlarının tamamına sığdırmak Trakya ve Biga
-   * içlerini de kadraja sokup boğazı minik bırakıyor; onun yerine zafer puanı
-   * olan iller (yani fiilî muharebe alanı) çerçevelenir.
+   * İl dolguları ve sınırları BİR KEZ kurulur. Dolgular beyaz çizilir;
+   * harita moduna göre her karede yalnızca `tint` ve `alpha` değişir.
    */
+  private buildProvinceGeometry(): void {
+    const list = provinces();
+    const hairline = (gameMap().bounds.maxX - gameMap().bounds.minX) / 4000;
+
+    this.gBorders.clear();
+    for (const p of list) {
+      if (p.polygon.length < 3) continue;
+      const pts: number[] = [];
+      let minX = Infinity;
+      let minY = Infinity;
+      let maxX = -Infinity;
+      let maxY = -Infinity;
+      for (const v of p.polygon) {
+        pts.push(v.x, v.y);
+        if (v.x < minX) minX = v.x;
+        if (v.y < minY) minY = v.y;
+        if (v.x > maxX) maxX = v.x;
+        if (v.y > maxY) maxY = v.y;
+      }
+
+      const g = new Graphics();
+      g.poly(pts).fill({ color: 0xffffff });
+      g.eventMode = 'none';
+      this.gFillLayer.addChild(g);
+      this.nodes.push({ province: p, fill: g, minX, minY, maxX, maxY });
+
+      if (!p.isSea) {
+        this.gBorders.poly(pts, true).stroke({
+          width: hairline,
+          color: C.accentDim,
+          alpha: 0.5,
+        });
+      }
+    }
+  }
+
+  private buildCoast(): void {
+    this.gCoast.clear();
+    const rings = gameMap().coastRings;
+    if (rings.length === 0) return;
+    const w = Math.max(60, 1.5 / this.zoom);
+    for (const ring of rings) {
+      if (ring.length < 3) continue;
+      const pts: number[] = [];
+      for (const v of ring) pts.push(v.x, v.y);
+      this.gCoast.poly(pts, true).stroke({ width: w * 2.6, color: C.coast, alpha: 0.16 });
+      this.gCoast.poly(pts, true).stroke({ width: w, color: C.coast, alpha: 0.95 });
+    }
+  }
+
+  // ───────────────────────────────────────────────── görünüm / girdi ──
+
   private theatreBox(): { minX: number; minY: number; maxX: number; maxY: number } {
+    if (mapKind() === 'dunya') {
+      // gameMap().bounds TÜM dünyayı verir. Cephe senaryosunda harita zaten
+      // bbox'a kırpılmış durumda; kadraj YÜKLÜ illerden hesaplanmalı, yoksa
+      // Doğu Cephesi dünyanın ortasında minik bir leke olarak açılıyor.
+      let a = Infinity;
+      let b = Infinity;
+      let c = -Infinity;
+      let d = -Infinity;
+      for (const p of provinces()) {
+        if (p.isSea) continue;
+        for (const v of p.polygon) {
+          if (v.x < a) a = v.x;
+          if (v.y < b) b = v.y;
+          if (v.x > c) c = v.x;
+          if (v.y > d) d = v.y;
+        }
+      }
+      if (a === Infinity) return gameMap().bounds;
+      const px = (c - a) * 0.05;
+      const py = (d - b) * 0.05;
+      return { minX: a - px, minY: b - py, maxX: c + px, maxY: d + py };
+    }
     let minX = Infinity;
     let minY = Infinity;
     let maxX = -Infinity;
     let maxY = -Infinity;
-    for (const p of MAP.provinces) {
-      // Adalar ve açık deniz çerçeveye girmez: Gökçeada ile Bozcaada kadrajı
-      // iki katına çıkarıp boğazı görünmez hâle getiriyor. Oyun boğazda geçiyor.
+    for (const p of provinces()) {
       if (OUT_OF_FRAME.has(p.id)) continue;
       if (p.victoryPoints === 0 && p.supplyHub === 0) continue;
       for (const v of p.polygon) {
@@ -280,12 +385,9 @@ export class MapView {
     const b = this.theatreBox();
     const sw = this.app.screen.width;
     const sh = this.app.screen.height;
-    const fit = Math.min(
-      (sw - 520) / (b.maxX - b.minX),
-      (sh - 110) / (b.maxY - b.minY),
-    );
+    const fit = Math.min((sw - 520) / (b.maxX - b.minX), (sh - 110) / (b.maxY - b.minY));
+    this.fitZoom = fit;
     if (!keepZoom) this.zoom = fit;
-    // Paneller sağda ve üstte yer kapladığı için merkez hafifçe sola kayar.
     this.panX = (sw - 340) / 2 + 150 - ((b.minX + b.maxX) / 2) * this.zoom;
     this.panY = (sh + 62) / 2 - ((b.minY + b.maxY) / 2) * this.zoom;
     this.applyTransform();
@@ -307,10 +409,14 @@ export class MapView {
     canvas.addEventListener(
       'wheel',
       (e) => {
+        if (!this.state) return;
         e.preventDefault();
         const before = this.toWorld(e.offsetX, e.offsetY);
         const k = Math.exp(-e.deltaY * 0.0014);
-        this.zoom = Math.min(0.06, Math.max(0.0035, this.zoom * k));
+        // Sınırlar açılış kadrajına göre: cephe küçükse daha çok yakınlaşılır.
+        const lo = this.fitZoom * 0.5;
+        const hi = this.fitZoom * 42;
+        this.zoom = Math.min(hi, Math.max(lo, this.zoom * k));
         const after = this.toWorld(e.offsetX, e.offsetY);
         this.panX += (after.x - before.x) * this.zoom;
         this.panY += (after.y - before.y) * this.zoom;
@@ -321,22 +427,23 @@ export class MapView {
     );
 
     this.app.stage.on('pointerdown', (e: FederatedPointerEvent) => {
+      if (!this.state) return;
       this.dragging = true;
       this.dragMoved = 0;
       this.dragFrom = { x: e.global.x, y: e.global.y };
     });
-
     this.app.stage.on('pointerup', (e: FederatedPointerEvent) => {
       this.dragging = false;
-      if (this.dragMoved > 6) return;
+      if (!this.state || this.dragMoved > 6) return;
       this.handleClick(e.global.x, e.global.y);
     });
-
     this.app.stage.on('pointerupoutside', () => {
       this.dragging = false;
     });
-
     this.app.stage.on('globalpointermove', (e: FederatedPointerEvent) => {
+      // Küre ekranı açıkken harita yüklü değil; Pixi sahnesi yine de olay
+      // alıyor ve provinceAt() "harita yüklenmedi" diye patlıyordu.
+      if (!this.state) return;
       if (this.dragging) {
         const dx = e.global.x - this.dragFrom.x;
         const dy = e.global.y - this.dragFrom.y;
@@ -347,34 +454,17 @@ export class MapView {
         this.applyTransform();
         return;
       }
-      const p = this.pick(e.global.x, e.global.y);
+      const p = provinceAt(this.toWorld(e.global.x, e.global.y));
       if (p?.id !== this.hovered) {
         this.hovered = p?.id ?? null;
-        this.draw();
+        this.drawHighlight();
       }
-      this.cb.onHover(p ? { kind: 'il', id: p.id } : null, {
-        x: e.global.x,
-        y: e.global.y,
-      });
+      this.cb.onHover(p ? { kind: 'il', id: p.id } : null, { x: e.global.x, y: e.global.y });
     });
   }
 
-  private pick(sx: number, sy: number): Province | null {
-    const w = this.toWorld(sx, sy);
-    let best: Province | null = null;
-    let bestD = Infinity;
-    for (const p of MAP.provinces) {
-      const d = dist(w, p.center);
-      if (d < bestD && pointInPolygon(w, p.polygon)) {
-        best = p;
-        bestD = d;
-      }
-    }
-    return best;
-  }
-
   private handleClick(sx: number, sy: number): void {
-    const p = this.pick(sx, sy);
+    const p = provinceAt(this.toWorld(sx, sy));
     if (!p) {
       this.cb.onSelect(null);
       return;
@@ -385,7 +475,6 @@ export class MapView {
     }
     const st = this.state;
     if (st) {
-      // Önce ildeki kendi birimini seç — oynanışta istenen bu.
       const unit = Object.values(st.landUnits).find(
         (u) => u.location === p.id && !u.embarkedIn && u.strength > 0 && u.side === st.playerSide,
       );
@@ -404,16 +493,181 @@ export class MapView {
     this.cb.onSelect({ kind: 'il', id: p.id });
   }
 
+  /** Hata ayıklama: dolgu katmanının gerçekten çizilip çizilmediğini gör. */
+  debugInfo(): Record<string, unknown> {
+    const sample = this.nodes[Math.floor(this.nodes.length / 2)];
+    return {
+      dugum: this.nodes.length,
+      dolguCocuk: this.gFillLayer.children.length,
+      dolguGorunur: this.gFillLayer.visible,
+      dolguAlpha: this.gFillLayer.alpha,
+      zIndex: this.gFillLayer.zIndex,
+      ornek: sample
+        ? {
+            id: sample.province.id,
+            visible: sample.fill.visible,
+            tint: sample.fill.tint,
+            alpha: sample.fill.alpha,
+            bounds: [sample.minX, sample.minY, sample.maxX, sample.maxY],
+          }
+        : null,
+      zoom: this.zoom,
+      pan: [this.panX, this.panY],
+    };
+  }
+
   setState(s: GameState): void {
     this.state = s;
     this.draw();
   }
 
-  centreOn(id: ProvinceId): void {
+  /**
+   * Harita değişmeden önce çağrılır. Eski oyun durumu YENİ haritayla
+   * çizilirse `prov()` eski il kimliklerinde patlıyor; durum boşaltılıp
+   * dinamik katmanlar temizlenir.
+   */
+  clearState(): void {
+    this.state = null;
+    this.counterPos.clear();
+    this.fillNow.clear();
+    this.fillTarget.clear();
+    this.flash.clear();
+    this.selection = null;
+    this.hovered = null;
+    this.targeting = false;
+    this.validTargets = new Set();
+    this.gMines.clear();
+    this.gForts.clear();
+    this.gPaths.clear();
+    this.gHighlight.clear();
+    for (const c of this.counterPool) c.visible = false;
+    for (const l of this.labelPool) l.visible = false;
+  }
+
+  centreOn(id: ProvinceId, zoom = this.zoom): void {
     const c = prov(id).center;
-    this.panX = this.app.screen.width / 2 - c.x * this.zoom;
-    this.panY = this.app.screen.height / 2 - c.y * this.zoom;
+    this.glideTo(
+      this.app.screen.width / 2 - c.x * zoom,
+      this.app.screen.height / 2 - c.y * zoom,
+      zoom,
+    );
+  }
+
+  /**
+   * Açılışta kadraj biraz uzaktan alınıp içeri süzülür.
+   * Ekran MERKEZİ sabit kalacak şekilde ölçeklenir; aksi hâlde pan değeri
+   * kadrajın dışına fırlıyor ve ilk kare tamamen boş çiziliyordu.
+   */
+  introSweep(): void {
+    if (this.reduced) return;
+    const tx = this.panX;
+    const ty = this.panY;
+    const tz = this.zoom;
+    const k = 0.78;
+    const cx = this.app.screen.width / 2;
+    const cy = this.app.screen.height / 2;
+    this.zoom = tz * k;
+    this.panX = cx + (tx - cx) * k;
+    this.panY = cy + (ty - cy) * k;
     this.applyTransform();
+    this.camTarget = { x: tx, y: ty, zoom: tz };
+  }
+
+  /** Bu illerde muharebe oldu — kısa bir parlama göster. */
+  flashCombat(ids: readonly ProvinceId[]): void {
+    for (const id of ids) this.flash.set(id, 1);
+  }
+
+  /**
+   * Kare güncellemesi. Yalnız YUMUŞATMA yapar; ağır yeniden hesap `draw()`
+   * içinde ve sadece durum değişince olur.
+   *
+   * Zaman tabanlı üstel yumuşatma kullanılır (kare sayısı tabanlı değil):
+   * 144 Hz ekranda animasyon iki kat hızlanmasın diye.
+   */
+  private tick(): void {
+    const now = performance.now();
+    const dt = Math.min(64, now - (this.lastFrame || now));
+    this.lastFrame = now;
+    if (dt <= 0) return;
+
+    let dirty = false;
+    let camMoved = false;
+
+    // Kamera
+    if (this.camTarget) {
+      const k = this.reduced ? 1 : 1 - Math.exp(-dt / 95);
+      const dx = this.camTarget.x - this.panX;
+      const dy = this.camTarget.y - this.panY;
+      const dz = this.camTarget.zoom - this.zoom;
+      if (Math.abs(dx) < 0.4 && Math.abs(dy) < 0.4 && Math.abs(dz) < this.zoom * 1e-4) {
+        this.panX = this.camTarget.x;
+        this.panY = this.camTarget.y;
+        this.zoom = this.camTarget.zoom;
+        this.camTarget = null;
+      } else {
+        this.panX += dx * k;
+        this.panY += dy * k;
+        this.zoom += dz * k;
+      }
+      this.applyTransform();
+      dirty = true;
+      camMoved = true;
+    }
+
+    // İl dolguları — mod değişimi çapraz geçişle
+    if (this.fillTarget.size > 0) {
+      const k = this.reduced ? 1 : 1 - Math.exp(-dt / 110);
+      let moving = false;
+      for (const n of this.nodes) {
+        if (!n.fill.visible && !this.fillTarget.has(n.province.id)) continue;
+        const want = this.fillTarget.get(n.province.id);
+        if (!want) continue;
+        const cur = this.fillNow.get(n.province.id) ?? { colour: want.colour, alpha: 0 };
+        const na = cur.alpha + (want.alpha - cur.alpha) * k;
+        const nc = want.colour;
+        if (Math.abs(na - want.alpha) > 0.004) moving = true;
+        this.fillNow.set(n.province.id, { colour: nc, alpha: na });
+        n.fill.visible = na > 0.004;
+        n.fill.tint = nc;
+        n.fill.alpha = na;
+      }
+      if (moving) dirty = true;
+    }
+
+    // Muharebe parlaması söner
+    if (this.flash.size > 0) {
+      for (const [id, v] of this.flash) {
+        const next = v - dt / 1400;
+        if (next <= 0) this.flash.delete(id);
+        else this.flash.set(id, next);
+      }
+      dirty = true;
+    }
+
+    if (dirty && this.state) {
+      // Kamera oynadıysa görünürlük kırpması değişti: dolgu hedefleri
+      // yeniden hesaplanmalı, yoksa süzülerek gelen kadrajda iller hiç
+      // boyanmadan kalıyor.
+      if (camMoved) this.paintProvinces(this.state);
+      this.drawHighlight();
+      this.drawUnits(this.state, dt);
+      this.drawLabels(this.state);
+    } else if (dirty) {
+      this.drawHighlight();
+    }
+  }
+
+  /** Kamerayı yumuşak biçimde hedefe götür. */
+  private glideTo(x: number, y: number, zoom = this.zoom): void {
+    if (this.reduced) {
+      this.panX = x;
+      this.panY = y;
+      this.zoom = zoom;
+      this.applyTransform();
+      return;
+    }
+    this.camTarget = { x, y, zoom };
   }
 
   // ───────────────────────────────────────────────────────── çizim ────
@@ -421,13 +675,21 @@ export class MapView {
   draw(): void {
     const s = this.state;
     if (!s) return;
-    this.drawProvinces(s);
-    this.drawCoast();
+    this.paintProvinces(s);
+    this.drawHighlight();
     this.drawMines(s);
     this.drawForts(s);
     this.drawUnits(s);
     this.drawPaths(s);
     this.drawLabels(s);
+  }
+
+  /** Görünür dünya dikdörtgeni — ekran dışı iller hiç çizilmez. */
+  private viewBox() {
+    const a = this.toWorld(0, 0);
+    const b = this.toWorld(this.app.screen.width, this.app.screen.height);
+    const m = (b.x - a.x) * 0.08;
+    return { minX: a.x - m, minY: a.y - m, maxX: b.x + m, maxY: b.y + m };
   }
 
   private fillFor(s: GameState, p: Province): { colour: number; alpha: number } {
@@ -436,13 +698,19 @@ export class MapView {
 
     switch (this.mode) {
       case 'siyasi': {
-        // Videoda zemin rölyeftir; taraf rengi sadece karada ve hafif.
-        if (!seen || !st.controller) return { colour: C.land, alpha: 0 };
+        if (!seen) return { colour: C.land, alpha: 0 };
         if (p.isSea) return { colour: C.sea, alpha: 0 };
-        return {
-          colour: st.controller === 'ottoman' ? C.ottoman : C.entente,
-          alpha: 0.13,
-        };
+        const world = mapKind() !== 'canakkale';
+        if (!st.controller) {
+          // Tarafsızlar dünyada ayrı okunmalı; Çanakkale'de böyle il yok.
+          return world ? { colour: 0x6b6450, alpha: 0.4 } : { colour: C.land, alpha: 0 };
+        }
+        // Çanakkale'de amber kıyı çizgisi haritayı taşıdığı için taraf rengi
+        // hafif kalabiliyor. Dünyada kıyı katmanı yok: blokları okunur kılan
+        // tek şey renk, o yüzden baskın olmalı.
+        return world
+          ? { colour: st.controller === 'ottoman' ? 0xe0574a : 0x5f93d8, alpha: 0.58 }
+          : { colour: st.controller === 'ottoman' ? C.ottoman : C.entente, alpha: 0.13 };
       }
       case 'arazi': {
         const t = TERRAINS[p.terrain];
@@ -457,13 +725,12 @@ export class MapView {
       }
       case 'deniz': {
         if (!p.isSea) return { colour: C.land, alpha: 0.12 };
-        const current = p.current ?? 0;
-        return { colour: C.entente, alpha: 0.06 + current * 0.06 };
+        return { colour: C.entente, alpha: 0.06 + (p.current ?? 0) * 0.06 };
       }
       case 'mayin': {
         if (!p.isSea) return { colour: C.land, alpha: 0.12 };
         const mines = minefieldsIn(s, p.id)
-          .filter((m) => m.side !== s.playerSide ? m.spotted : true)
+          .filter((m) => (m.side !== s.playerSide ? m.spotted : true))
           .reduce((n, m) => n + m.mines, 0);
         if (mines === 0) return { colour: C.sea, alpha: 0 };
         return { colour: C.mine, alpha: Math.min(0.42, 0.07 + mines / 420) };
@@ -471,99 +738,96 @@ export class MapView {
     }
   }
 
-  private drawProvinces(s: GameState): void {
-    this.gFill.clear();
-    this.gEdge.clear();
-    const hairline = 1 / this.zoom;
-
-    for (const p of MAP.provinces) {
-      const poly = p.polygon;
-      if (poly.length < 3) continue;
-      const pts: number[] = [];
-      for (const v of poly) pts.push(v.x, v.y);
-
-      const { colour, alpha } = this.fillFor(s, p);
-      if (alpha > 0) this.gFill.poly(pts).fill({ color: colour, alpha });
-
-      // Savaş sisi: görülmemiş KARA koyulaşır. Denize uygulanmıyor, yoksa
-      // haritanın yarısı siyah bir leke oluyor.
-      if (!p.isSea && !s.provinces[p.id]!.seen[s.playerSide]) {
-        this.gFill.poly(pts).fill({ color: C.void, alpha: 0.42 });
+  /**
+   * Dolgu HEDEFLERİNİ hesaplar; gerçek değer `tick()` içinde hedefe doğru
+   * yumuşatılır. Harita modu değişince renkler sıçramak yerine geçiş yapar.
+   */
+  private paintProvinces(s: GameState): void {
+    const v = this.viewBox();
+    this.fillTarget.clear();
+    for (const n of this.nodes) {
+      if (n.maxX < v.minX || n.minX > v.maxX || n.maxY < v.minY || n.minY > v.maxY) {
+        n.fill.visible = false;
+        this.fillNow.delete(n.province.id);
+        continue;
       }
+      const p = n.province;
+      const fogged = !p.isSea && !s.provinces[p.id]!.seen[s.playerSide];
+      const want = fogged ? { colour: C.void, alpha: 0.42 } : this.fillFor(s, p);
 
-      const selected = this.selection?.kind === 'il' && this.selection.id === p.id;
-      const hovered = this.hovered === p.id;
-      const targetable = this.targeting && (this.validTargets.size === 0 || this.validTargets.has(p.id));
+      const hit = this.flash.get(p.id);
+      const target = hit
+        ? { colour: C.mine, alpha: Math.max(want.alpha, 0.2 + hit * 0.45) }
+        : want;
 
-      if (targetable) {
-        this.gEdge.poly(pts).stroke({ width: hairline * 2.2, color: C.accent, alpha: 0.9 });
-      } else if (selected) {
-        this.gEdge.poly(pts).stroke({ width: hairline * 2.4, color: C.accentGlow, alpha: 1 });
-      } else if (hovered) {
-        this.gEdge.poly(pts).stroke({ width: hairline * 1.6, color: C.accent, alpha: 0.6 });
-      } else if (this.mode !== 'siyasi' || p.victoryPoints > 0) {
-        this.gEdge.poly(pts).stroke({ width: hairline, color: C.accentDim, alpha: 0.28 });
+      this.fillTarget.set(p.id, target);
+      if (!this.fillNow.has(p.id)) {
+        // İlk kez görünüyor: hedef renge sıfır saydamlıktan açıl.
+        this.fillNow.set(p.id, { colour: target.colour, alpha: 0 });
       }
     }
   }
 
-  private drawCoast(): void {
-    this.gCoast.clear();
-    const w = Math.max(60, 1.5 / this.zoom);
-    for (const ring of MAP.coastRings) {
-      if (ring.length < 3) continue;
+  /** Seçim, vurgu ve hedef çerçeveleri — her karede en çok birkaç çokgen. */
+  private drawHighlight(): void {
+    this.gHighlight.clear();
+    const hair = 1 / this.zoom;
+    const outline = (id: ProvinceId, colour: number, width: number, alpha: number) => {
+      const p = prov(id);
+      if (p.polygon.length < 3) return;
       const pts: number[] = [];
-      for (const v of ring) pts.push(v.x, v.y);
-      // Önce geniş sönük bir hale, üstüne ince parlak çizgi — videodaki
-      // amber kıyı şeridi bu iki geçişle oluşuyor.
-      this.gCoast.poly(pts, true).stroke({ width: w * 2.6, color: C.coast, alpha: 0.16 });
-      this.gCoast.poly(pts, true).stroke({ width: w, color: C.coast, alpha: 0.95 });
+      for (const q of p.polygon) pts.push(q.x, q.y);
+      this.gHighlight.poly(pts, true).stroke({ width: hair * width, color: colour, alpha });
+    };
+
+    if (this.targeting) {
+      let drawn = 0;
+      const v = this.viewBox();
+      for (const n of this.nodes) {
+        if (drawn > 400) break;
+        if (this.validTargets.size > 0 && !this.validTargets.has(n.province.id)) continue;
+        if (n.maxX < v.minX || n.minX > v.maxX || n.maxY < v.minY || n.minY > v.maxY) continue;
+        outline(n.province.id, C.accent, 2.0, 0.85);
+        drawn++;
+      }
     }
+    if (this.hovered) outline(this.hovered, C.accent, 1.8, 0.7);
+    if (this.selection?.kind === 'il') outline(this.selection.id, C.accentGlow, 2.6, 1);
   }
 
   private drawMines(s: GameState): void {
     this.gMines.clear();
+    if (mapKind() !== 'canakkale') return;
     const r = Math.max(260, 3.1 / this.zoom);
     for (const m of Object.values(s.minefields)) {
       if (m.mines <= 0 || m.laidOn > s.day) continue;
       const mine = m.side === s.playerSide;
       if (!mine && !m.spotted) continue;
-
       const n = Math.max(2, Math.min(32, Math.round(m.mines / 2)));
       const colour = mine ? C.mine : C.hostile;
-      const alpha = mine ? 0.95 : 0.78;
       for (let i = 0; i < n; i++) {
         const t = n === 1 ? 0.5 : i / (n - 1);
         this.gMines
           .circle(m.from.x + (m.to.x - m.from.x) * t, m.from.y + (m.to.y - m.from.y) * t, r)
-          .fill({ color: colour, alpha });
-      }
-      if (!mine) {
-        this.gMines
-          .moveTo(m.from.x, m.from.y)
-          .lineTo(m.to.x, m.to.y)
-          .stroke({ width: Math.max(90, 1 / this.zoom), color: C.mineDim, alpha: 0.5 });
+          .fill({ color: colour, alpha: mine ? 0.95 : 0.78 });
       }
     }
   }
 
   private drawForts(s: GameState): void {
     this.gForts.clear();
+    if (mapKind() !== 'canakkale') return;
     const half = Math.max(320, 4.2 / this.zoom);
     const hairline = Math.max(70, 1 / this.zoom);
-
     for (const f of Object.values(s.forts)) {
       const own = s.provinces[f.province]?.controller === s.playerSide;
       if (!own && !f.spotted) continue;
-
       const dead = f.integrity <= 0.05;
       const colour = dead ? C.textFaint : own ? C.accent : C.hostile;
       this.gForts
         .rect(f.pos.x - half, f.pos.y - half, half * 2, half * 2)
         .stroke({ width: hairline * 1.6, color: colour, alpha: dead ? 0.5 : 1 })
         .fill({ color: colour, alpha: dead ? 0.1 : 0.3 * f.integrity });
-
-      // Seçili tabyanın menzil çemberi.
       if (this.selection?.kind === 'tabya' && this.selection.id === f.id) {
         this.gForts
           .circle(f.pos.x, f.pos.y, fortRange(f))
@@ -586,7 +850,6 @@ export class MapView {
       this.gPaths.stroke({ width: w, color: colour, alpha: 0.75 });
       this.gPaths.circle(prev.x, prev.y, w * 2.4).fill({ color: colour, alpha: 0.9 });
     };
-
     for (const u of Object.values(s.landUnits)) {
       if (u.side !== s.playerSide || !u.order) continue;
       if (u.order.kind === 'yuru') drawPath(u.location, u.order.path, C.accent);
@@ -605,8 +868,11 @@ export class MapView {
     }
   }
 
-  private drawUnits(s: GameState): void {
-    // Havuzu yeniden kullan — her turda yüzlerce Text yaratmak pahalı.
+  /**
+   * Birlik sayaçları. `dt` verilirse sayaç yeni iline SIÇRAMAZ, kayarak
+   * gider: emirlerin sonucunu gözle takip edebilmek için.
+   */
+  private drawUnits(s: GameState, dt = 0): void {
     let used = 0;
     const take = (): Container => {
       let c = this.counterPool[used];
@@ -625,8 +891,7 @@ export class MapView {
     };
 
     const scale = 1 / this.zoom;
-
-    // ── Kara birlikleri: ildeki yığın tek sayaçta ──
+    const v = this.viewBox();
     const stacks = new Map<ProvinceId, { side: Side; men: number; n: number; combat: boolean }>();
     for (const u of Object.values(s.landUnits)) {
       if (u.embarkedIn || u.strength <= 0) continue;
@@ -637,20 +902,26 @@ export class MapView {
         cur.n++;
         cur.combat ||= u.inCombat;
       } else if (!cur) {
-        stacks.set(u.location, {
-          side: u.side,
-          men: u.strength,
-          n: 1,
-          combat: u.inCombat,
-        });
+        stacks.set(u.location, { side: u.side, men: u.strength, n: 1, combat: u.inCombat });
       }
     }
 
-    for (const [id, st] of stacks) {
-      const c = take();
+    // 643 tümenin hepsini aynı anda çizmek haritayı okunmaz yapıyor.
+    // Görüş alanındaki en kalabalık yığınlar gösterilir.
+    const visible = [...stacks.entries()]
+      .filter(([id]) => {
+        const c = prov(id).center;
+        return c.x >= v.minX && c.x <= v.maxX && c.y >= v.minY && c.y <= v.maxY;
+      })
+      .sort((a, b) => b[1].men - a[1].men)
+      .slice(0, MAX_COUNTERS);
+
+    for (const [id, st] of visible) {
       const p = prov(id);
-      c.position.set(p.center.x, p.center.y);
-      c.scale.set(scale);
+      const c = take();
+      const key = `k:${st.side}:${id}`;
+      c.position.set(...this.easePos(key, p.center, dt));
+      c.scale.set(scale * (st.combat ? 1.12 : 1));
       const g = c.children[0] as Graphics;
       const t = c.children[1] as Text;
       const col = st.side === 'ottoman' ? C.ottoman : C.entente;
@@ -660,7 +931,6 @@ export class MapView {
         .rect(-w / 2, -h / 2, w, h)
         .fill({ color: C.panel, alpha: 0.92 })
         .stroke({ width: 1.2, color: st.combat ? C.mine : col, alpha: 1 });
-      // Piyade sembolü (çapraz).
       g.moveTo(-w / 2 + 3, -h / 2 + 3)
         .lineTo(-w / 2 + 11, h / 2 - 3)
         .moveTo(-w / 2 + 11, -h / 2 + 3)
@@ -672,20 +942,20 @@ export class MapView {
       if (st.n > 1) t.text += `·${st.n}`;
     }
 
-    // ── Filolar: videodaki eğik gemi işareti ──
     for (const f of Object.values(s.fleets)) {
       const alive = liveShips(f);
       if (alive.length === 0) continue;
       if (f.side !== s.playerSide && !s.provinces[f.location]?.seen[s.playerSide]) continue;
-      const c = take();
       const p = prov(f.location);
-      c.position.set(p.center.x, p.center.y);
+      if (p.center.x < v.minX || p.center.x > v.maxX) continue;
+      if (p.center.y < v.minY || p.center.y > v.maxY) continue;
+      const c = take();
+      c.position.set(...this.easePos(`f:${f.id}`, p.center, dt));
       c.scale.set(scale);
       const g = c.children[0] as Graphics;
       const t = c.children[1] as Text;
       const col = f.side === 'ottoman' ? C.ottoman : C.ship;
       g.clear();
-      // Birkaç küçük gemi silueti, hafif ofsetli — videodaki filo gösterimi.
       const show = Math.min(5, alive.length);
       for (let i = 0; i < show; i++) {
         const ox = (i % 3) * 11 - 11;
@@ -699,9 +969,28 @@ export class MapView {
       t.y = 13;
     }
 
-    for (let i = used; i < this.counterPool.length; i++) {
-      this.counterPool[i]!.visible = false;
+    for (let i = used; i < this.counterPool.length; i++) this.counterPool[i]!.visible = false;
+  }
+
+  /**
+   * Sayaç konumunu hedefe doğru yumuşat. Anahtar başına son konum saklanır;
+   * birlik il değiştirdiğinde ışınlanmak yerine kayar.
+   */
+  private easePos(
+    key: string,
+    target: { x: number; y: number },
+    dt: number,
+  ): [number, number] {
+    const cur = this.counterPos.get(key);
+    if (!cur || this.reduced || dt <= 0) {
+      this.counterPos.set(key, { x: target.x, y: target.y });
+      return [target.x, target.y];
     }
+    const k = 1 - Math.exp(-dt / 160);
+    const nx = cur.x + (target.x - cur.x) * k;
+    const ny = cur.y + (target.y - cur.y) * k;
+    this.counterPos.set(key, { x: nx, y: ny });
+    return [nx, ny];
   }
 
   private drawLabels(s: GameState): void {
@@ -721,34 +1010,46 @@ export class MapView {
     };
 
     const scale = 1 / this.zoom;
-    // Ekran uzayında basit çakışma testi: Arıburnu çevresinde altı il birkaç
-    // kilometreye sığıyor ve etiketler üst üste binip okunmaz hâle geliyordu.
+    const v = this.viewBox();
     const placed: { x: number; y: number; w: number; h: number }[] = [];
-    const overlaps = (x: number, y: number, w: number, h: number): boolean =>
-      placed.some(
-        (r) =>
-          Math.abs(r.x - x) * 2 < r.w + w && Math.abs(r.y - y) * 2 < r.h + h,
-      );
+    const world = mapKind() === 'dunya';
 
-    // Önemli iller önce yerleşsin ki çakışmada onlar kazansın.
-    const ordered = [...MAP.provinces].sort(
-      (a, b) => b.victoryPoints + b.supplyHub / 1e5 - (a.victoryPoints + a.supplyHub / 1e5),
+    const ordered = [...provinces()].sort(
+      (a, b) =>
+        b.victoryPoints + b.supplyHub / 1e5 - (a.victoryPoints + a.supplyHub / 1e5),
     );
+
     for (const p of ordered) {
+      if (used >= MAX_LABELS) break;
       if (!p.labelled) continue;
-      if (p.isSea && this.mode !== 'deniz' && this.mode !== 'mayin' && p.victoryPoints === 0) {
+      if (p.center.x < v.minX || p.center.x > v.maxX) continue;
+      if (p.center.y < v.minY || p.center.y > v.maxY) continue;
+      if (!world) {
+        if (p.isSea && this.mode !== 'deniz' && this.mode !== 'mayin' && p.victoryPoints === 0) {
+          continue;
+        }
+        if (!s.provinces[p.id]!.seen[s.playerSide] && p.victoryPoints === 0) continue;
+      } else if (p.isSea && this.mode !== 'deniz') {
         continue;
       }
-      if (!s.provinces[p.id]!.seen[s.playerSide] && p.victoryPoints === 0) continue;
-      const major = p.victoryPoints >= 3 || p.supplyHub > 0;
-      if (!major && this.zoom < 0.0075) continue;
+
+      const major = world
+        ? !p.isSea && (metaOf(p.id)?.cells ?? 0) > 1400
+        : p.victoryPoints >= 3 || p.supplyHub > 0;
+      if (!major && this.zoom < (world ? 0.00006 : 0.0075)) continue;
 
       const text = p.name.toLocaleUpperCase('tr-TR');
       const sx = p.center.x * this.zoom + this.panX;
       const sy = p.center.y * this.zoom + this.panY + 15;
       const bw = text.length * (major ? 8.4 : 6.9);
       const bh = major ? 15 : 12;
-      if (overlaps(sx, sy, bw, bh)) continue;
+      if (
+        placed.some(
+          (r) => Math.abs(r.x - sx) * 2 < r.w + bw && Math.abs(r.y - sy) * 2 < r.h + bh,
+        )
+      ) {
+        continue;
+      }
       placed.push({ x: sx, y: sy, w: bw, h: bh });
 
       const t = take(major ? LABEL_STYLE : LABEL_MINOR);
@@ -759,9 +1060,21 @@ export class MapView {
 
     for (let i = used; i < this.labelPool.length; i++) this.labelPool[i]!.visible = false;
   }
-
-  /** Dar boğaz ölçek çubuğu ve kaynak notu — videodaki alt yazı. */
-  drawFootnote(): void {
-    this.gOverlay.clear();
-  }
 }
+
+/** Çanakkale açılış kadrajına dahil edilmeyen iller — uzak üsler, açık deniz. */
+const OUT_OF_FRAME: ReadonlySet<string> = new Set([
+  'bozcaada',
+  'gokceada',
+  'd_ege_acik',
+  'd_gokceada_acigi',
+  'd_bozcaada_acigi',
+  'd_besike',
+  'd_saros',
+  'bolayir',
+  'lapseki',
+  'gelibolu',
+  'd_gelibolu_onu',
+]);
+
+export { dist };

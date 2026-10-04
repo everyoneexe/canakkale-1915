@@ -22,7 +22,7 @@
 
       <header id="ustbar">
         <div class="marka">
-          <span class="marka-ana">ÇANAKKALE</span><span class="marka-yil">1915</span>
+          <span class="marka-ana" id="marka-ana">ÇANAKKALE</span><span class="marka-yil" id="marka-yil">1915</span>
         </div>
         <div class="tarih-blok">
           <div id="tarih" class="tarih">—</div>
@@ -67,27 +67,50 @@
         </article>
       </div>
 
-      <div id="acilis" class="olay-katman">
-        <article class="olay olay-acilis">
-          <div class="olay-tarih">19 ŞUBAT 1915 — 9 OCAK 1916</div>
-          <h2 class="olay-baslik">ÇANAKKALE 1915</h2>
-          <p class="olay-govde duz">Birleşik Filo boğaz ağzında. Tabyalar mayın hatlarını koruyor, mayın hatları tabyaları. Bu döngü kırılmazsa boğaz geçilmez.</p>
-          <div class="taraf-sec" id="taraf-sec" aria-busy="true">
-            <button class="taraf" data-taraf="ottoman" disabled>
-              <span class="taraf-ad">OSMANLI</span>
-              <span class="taraf-alt">
-                Boğazı savun. Mayın dök, tabyaları besle, çıkarmaları denize dök.
-              </span>
+      <div id="acilis" class="acilis">
+        <div class="acilis-sol">
+          <div class="acilis-marka">
+            <span class="am-ana">CEPHE SEÇ</span>
+            <span class="am-alt">Küreyi döndür · bir cepheye tıkla</span>
+          </div>
+
+          <div class="savas-sec" id="savas-sec">
+            <button class="savas" data-savas="ww1" aria-pressed="true">
+              <span class="sv-ad">BİRİNCİ DÜNYA SAVAŞI</span>
+              <span class="sv-yil">1914 — 1918</span>
             </button>
-            <button class="taraf" data-taraf="entente" disabled>
-              <span class="taraf-ad">İTİLAF</span>
-              <span class="taraf-alt">
-                Boğazı zorla. Mayınları tara, tabyaları sustur, Marmara'ya çık.
-              </span>
+            <button class="savas" data-savas="ww2" aria-pressed="false">
+              <span class="sv-ad">İKİNCİ DÜNYA SAVAŞI</span>
+              <span class="sv-yil">1939 — 1945</span>
             </button>
           </div>
-          <p class="olay-kaynak" id="acilis-durum">Harita yükleniyor…</p>
-        </article>
+
+          <div class="cephe-liste" id="cephe-liste"></div>
+          <p class="acilis-not" id="acilis-durum">Harita yükleniyor…</p>
+        </div>
+
+        <div class="acilis-kure">
+          <canvas id="kure"></canvas>
+          <div class="kure-ipucu" id="kure-ipucu">
+            <span>Sürükle: döndür · Tekerlek: yakınlaştır</span>
+          </div>
+        </div>
+
+        <aside class="acilis-detay" id="acilis-detay" hidden>
+          <div class="ad-tarih" id="ad-tarih"></div>
+          <h2 class="ad-ad" id="ad-ad"></h2>
+          <p class="ad-ozet" id="ad-ozet"></p>
+          <div class="ad-taraf" id="ad-taraf"></div>
+          <div class="taraf-sec" id="taraf-sec">
+            <button class="taraf" data-taraf="ottoman" disabled>
+              <span class="taraf-ad" id="taraf-a-ad">A</span>
+            </button>
+            <button class="taraf" data-taraf="entente" disabled>
+              <span class="taraf-ad" id="taraf-b-ad">B</span>
+            </button>
+          </div>
+          <a class="ad-kaynak" id="ad-kaynak" target="_blank" rel="noopener">kaynak</a>
+        </aside>
       </div>
     </div>
     <script type="module" src="/src/main.ts"></script>

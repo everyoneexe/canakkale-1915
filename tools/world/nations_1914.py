@@ -1,0 +1,262 @@
+"""1914 egemenlik düzeltmeleri ve savaş tarafları.
+
+`world_1914.geojson`'un SUBJECTO alanı çoğunlukla doğru sömürge gücünü verir
+ama boşlukları var: Filipinler ABD'nin, Uganda ve Kenya İngiltere'nindi; veri
+bunları bağımsızmış gibi gösteriyor. Aşağıdaki tablo bu boşlukları kapatır.
+
+Taraf ataması oyun için belirleyici olan kısımdır: ülke adı değil, hangi
+blokta savaştığı önemli. Savaşa sonradan girenler `joins` tarihiyle verilir.
+"""
+from __future__ import annotations
+
+UK = "United Kingdom of Great Britain and Ireland"
+
+# SUBJECTO alanı yanlış/eksik olan 1914 bağımlılıkları.
+SOVEREIGN_FIX: dict[str, str] = {
+    "Philippines": "United States of America",
+    "Uganda": UK,
+    "Kenya": UK,
+    "Rhodesia": UK,
+    "Sudan": UK,
+    "Somaliland": UK,
+    "Gambia": UK,
+    "Sierra Leone": UK,
+    "Gold Coast": UK,
+    "Ghana": UK,
+    "Nigeria": UK,
+    "Ceylon": UK,
+    "Burma": UK,
+    "Malaya": UK,
+    "Cyprus": UK,
+    "Malta": UK,
+    "Gibraltar": UK,
+    "Papua": "Australia",
+    "Greenland": "Denmark",
+    "Iceland": "Denmark",
+    "Korea": "Empire of Japan",
+    "Formosa": "Empire of Japan",
+    "Taiwan": "Empire of Japan",
+    "Puerto Rico": "United States of America",
+    "Hawaii": "United States of America",
+    "Alaska": "United States of America",
+    "Cuba": "Cuba",
+    "Tunisia": "France",
+    "Chad": "France",
+    "Niger": "France",
+    "Mali": "France",
+    "Senegal": "France",
+    "Guinea": "France",
+    "Ivory Coast": "France",
+    "Dahomey": "France",
+    "Gabon": "France",
+    "Congo (France)": "France",
+    "Mauritania": "France",
+    "Burkina Faso": "France",
+    "Suriname": "Netherlands",
+    "Dutch East Indies": "Netherlands",
+    "Netherlands East Indies": "Netherlands",
+    "Netherlands Indies": "Netherlands",
+    # Rus Transkafkasyası ve Finlandiya Büyük Dukalığı 1914'te Rusya'ya bağlıydı.
+    "Azerbaijan": "Russia",
+    "Georgia": "Russia",
+    "Armenia": "Russia",
+    "Finland": "Russia",
+    # Alman sömürgeleri.
+    "Kamerun": "German Empire",
+    "Cameroon": "German Empire",
+    "German South-West Africa": "German Empire",
+    "German East Africa": "German Empire",
+    "Togoland": "German Empire",
+    # 1914'te Samoa ve Alman Yeni Gine'si savaşın ilk aylarında ele geçirildi.
+    "Samoa": "New Zealand",
+    "Papua New Guinea": "Australia",
+    # Diğer İngiliz toprakları.
+    "Guyana": UK,
+    "Lesotho": UK,
+    "Swaziland": UK,
+    "British Guiana": UK,
+    "Basutoland": UK,
+    # Qing 1912'de yıkıldı; 1914'te Çin Cumhuriyeti.
+    "Manchu Empire": "China",
+    "Qing Empire": "China",
+    "Portuguese Guinea": "Portugal",
+    "United Kingdom": UK,
+    "United States": "United States of America",
+}
+
+# taraf: itilaf | ittifak | tarafsiz
+# joins: ISO tarih — bu tarihten önce tarafsız sayılır.
+FACTION: dict[str, tuple[str, str | None]] = {
+    # ── İttifak Devletleri ──────────────────────────────────────────
+    "German Empire": ("ittifak", None),
+    "Austro-Hungarian Empire": ("ittifak", None),
+    "Ottoman Empire": ("ittifak", "1914-10-29"),
+    "Bulgaria": ("ittifak", "1915-10-14"),
+    # ── İtilaf Devletleri ───────────────────────────────────────────
+    UK: ("itilaf", None),
+    "France": ("itilaf", None),
+    "Russia": ("itilaf", None),
+    "Russian Empire": ("itilaf", None),
+    "Serbia": ("itilaf", None),
+    "Montenegro": ("itilaf", None),
+    "Belgium": ("itilaf", None),
+    "Empire of Japan": ("itilaf", "1914-08-23"),
+    "Australia": ("itilaf", None),
+    "Canada": ("itilaf", None),
+    "New Zealand": ("itilaf", None),
+    "South Africa": ("itilaf", None),
+    "India": ("itilaf", None),
+    "Newfoundland": ("itilaf", None),
+    "Italy": ("itilaf", "1915-05-23"),
+    "Kingdom of Italy": ("itilaf", "1915-05-23"),
+    "Portugal": ("itilaf", "1916-03-09"),
+    "Romania": ("itilaf", "1916-08-27"),
+    "Greece": ("itilaf", "1917-06-29"),
+    "United States of America": ("itilaf", "1917-04-06"),
+    "Brazil": ("itilaf", "1917-10-26"),
+    "China": ("itilaf", "1917-08-14"),
+    "Rattanakosin Kingdom": ("itilaf", "1917-07-22"),
+    "Siam": ("itilaf", "1917-07-22"),
+    "Liberia": ("itilaf", "1917-08-04"),
+    "Cuba": ("itilaf", "1917-04-07"),
+    # ── Tarafsızlar (savaş boyunca) ─────────────────────────────────
+    "Spain": ("tarafsiz", None),
+    "Netherlands": ("tarafsiz", None),
+    "Switzerland": ("tarafsiz", None),
+    "Sweden": ("tarafsiz", None),
+    "Norway": ("tarafsiz", None),
+    "Denmark": ("tarafsiz", None),
+    "Persia": ("tarafsiz", None),
+    "Afghanistan": ("tarafsiz", None),
+    "Ethiopia": ("tarafsiz", None),
+    "Abyssinia": ("tarafsiz", None),
+    "Mexico": ("tarafsiz", None),
+    "Argentina": ("tarafsiz", None),
+    "Chile": ("tarafsiz", None),
+    "Colombia": ("tarafsiz", None),
+    "Venezuela": ("tarafsiz", None),
+    "Morocco": ("tarafsiz", None),
+    "Nepal": ("tarafsiz", None),
+    "Bhutan": ("tarafsiz", None),
+    "Tibet": ("tarafsiz", None),
+    "Mongolia": ("tarafsiz", None),
+    "Luxembourg": ("tarafsiz", None),
+    "Albania": ("tarafsiz", None),
+    "Peru": ("tarafsiz", None),
+    "Ecuador": ("tarafsiz", None),
+    "Bolivia": ("tarafsiz", None),
+    "Paraguay": ("tarafsiz", None),
+    "Uruguay": ("tarafsiz", None),
+    "Guatemala": ("tarafsiz", None),
+    "Honduras": ("tarafsiz", None),
+    "Nicaragua": ("tarafsiz", None),
+    "El Salvador": ("tarafsiz", None),
+    "Costa Rica": ("tarafsiz", None),
+    "Dominican Republic": ("tarafsiz", None),
+    "Haiti": ("tarafsiz", None),
+    "Arabia (Nejd)": ("tarafsiz", None),
+    "Yemen": ("tarafsiz", None),
+    "Oman": ("tarafsiz", None),
+    "Panama": ("itilaf", "1917-04-07"),
+    "Sweden-Norway": ("tarafsiz", None),
+}
+
+# Türkçe görünen adlar.
+DISPLAY_TR: dict[str, str] = {
+    UK: "Birleşik Krallık",
+    "German Empire": "Alman İmparatorluğu",
+    "Austro-Hungarian Empire": "Avusturya-Macaristan",
+    "Ottoman Empire": "Osmanlı İmparatorluğu",
+    "Russia": "Rusya",
+    "Russian Empire": "Rusya",
+    "France": "Fransa",
+    "Italy": "İtalya",
+    "Kingdom of Italy": "İtalya",
+    "Empire of Japan": "Japonya",
+    "United States of America": "Amerika Birleşik Devletleri",
+    "Serbia": "Sırbistan",
+    "Montenegro": "Karadağ",
+    "Belgium": "Belçika",
+    "Bulgaria": "Bulgaristan",
+    "Romania": "Romanya",
+    "Greece": "Yunanistan",
+    "Portugal": "Portekiz",
+    "Spain": "İspanya",
+    "Netherlands": "Hollanda",
+    "Switzerland": "İsviçre",
+    "Sweden": "İsveç",
+    "Norway": "Norveç",
+    "Denmark": "Danimarka",
+    "China": "Çin",
+    "Brazil": "Brezilya",
+    "Mexico": "Meksika",
+    "Argentina": "Arjantin",
+    "Persia": "İran",
+    "Afghanistan": "Afganistan",
+    "Ethiopia": "Etiyopya",
+    "Abyssinia": "Habeşistan",
+    "Australia": "Avustralya",
+    "Canada": "Kanada",
+    "New Zealand": "Yeni Zelanda",
+    "South Africa": "Güney Afrika",
+    "India": "Hindistan",
+    "Rattanakosin Kingdom": "Siyam",
+    "Siam": "Siyam",
+    "Morocco": "Fas",
+    "Albania": "Arnavutluk",
+    "Luxembourg": "Lüksemburg",
+    "Liberia": "Liberya",
+    "Cuba": "Küba",
+    "Chile": "Şili",
+    "Colombia": "Kolombiya",
+    "Venezuela": "Venezuela",
+    "Nepal": "Nepal",
+    "Mongolia": "Moğolistan",
+    "Tibet": "Tibet",
+    "Newfoundland": "Newfoundland",
+    "Peru": "Peru",
+    "Ecuador": "Ekvador",
+    "Bolivia": "Bolivya",
+    "Paraguay": "Paraguay",
+    "Uruguay": "Uruguay",
+    "Guatemala": "Guatemala",
+    "Honduras": "Honduras",
+    "Nicaragua": "Nikaragua",
+    "El Salvador": "El Salvador",
+    "Dominican Republic": "Dominik Cumhuriyeti",
+    "Haiti": "Haiti",
+    "Panama": "Panama",
+    "Arabia (Nejd)": "Necid",
+    "Yemen": "Yemen",
+    "Oman": "Umman",
+}
+
+
+# Aynı devletin veri setindeki farklı yazımları. SOVEREIGN_FIX özelliğin
+# NAME alanına bakar; bu tablo ise SONUÇ dizesini normalleştirir — SUBJECTO
+# "United Kingdom" yazdığında da tek bir devlete bağlanması için gerekli.
+ALIAS: dict[str, str] = {
+    "United Kingdom": UK,
+    "Great Britain": UK,
+    "British Empire": UK,
+    "United States": "United States of America",
+    "USA": "United States of America",
+    "Russian Empire": "Russia",
+    "Kingdom of Italy": "Italy",
+    "Qing Empire": "China",
+    "Manchu Empire": "China",
+    "Abyssinia": "Ethiopia",
+    "Siam": "Rattanakosin Kingdom",
+    "Sweden-Norway": "Sweden",
+}
+
+
+def sovereign_of(name: str, subjecto: str | None, partof: str | None) -> str:
+    """Bir 1914 özelliğinin fiilî egemen gücü."""
+    raw = SOVEREIGN_FIX.get(name) or subjecto or partof or name
+    return ALIAS.get(raw, raw)
+
+
+def faction_of(sovereign: str) -> tuple[str, str | None]:
+    """(taraf, katılma tarihi). Bilinmeyen devletler tarafsız sayılır."""
+    return FACTION.get(sovereign, ("tarafsiz", None))

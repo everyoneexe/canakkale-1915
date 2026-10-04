@@ -7,9 +7,15 @@ import type {
   ProvinceId,
   Side,
 } from './core/types.ts';
-import { MAP, prov } from './core/geo.ts';
+import { loadMap, prov, provinces } from './core/geo.ts';
+import type { MapKind } from './core/geo.ts';
 import { WEATHERS } from './data/units.ts';
-import { formatDate, newGame } from './engine/scenario.ts';
+import { formatDate, newGame, setActiveScenario } from './engine/scenario.ts';
+import { newWorldGame } from './engine/world-scenario.ts';
+import { SIDE_LABEL_WORLD } from './data/world1914.ts';
+import { THEATRES, THEATRE_BY_ID } from './data/theatres.ts';
+import type { Theatre, WarId } from './data/theatres.ts';
+import { Globe } from './ui/globe.ts';
 import { endTurn, applyEffect } from './engine/turn.ts';
 import { issueLandOrder, issueNavalOrder } from './engine/orders.ts';
 import { liveShips, minefieldsIn } from './engine/naval.ts';
@@ -35,12 +41,20 @@ interface PendingOrder {
 }
 
 class Game {
-  private state: GameState = newGame('ottoman');
-  private view: MapView;
+  // Alan başlatıcısı kurucuda çalışır; harita henüz yüklenmemiş olur.
+  // start() içinde, loadMap()'ten SONRA atanır.
+  private state!: GameState;
+  view: MapView;
   private panel: Panel;
   private selection: Selection | null = null;
   private pending: PendingOrder | null = null;
   private eventQueue: HistoricalEvent[] = [];
+  private kind: MapKind = 'canakkale';
+  /** Bir önceki turun üst bar değerleri — değişenleri vurgulamak için. */
+  private oncekiOlcu: Record<string, string> = {};
+  private globe: Globe | null = null;
+  private war: WarId = 'ww1';
+  private theatre: Theatre = THEATRE_BY_ID['ww1_canakkale']!;
 
   constructor() {
     this.view = new MapView({
@@ -59,11 +73,17 @@ class Game {
   }
 
   async start(): Promise<void> {
-    // Taraf butonları HTML'de `disabled` geliyor. Harita dokusu (756 KB)
-    // inmeden etkinleştirilmezler; yoksa buton görünür olduğu hâlde dinleyici
-    // bağlanmadığı için ilk tıklama kayboluyor.
+    // SIRA ÖNEMLİ. geo.ts tekil harita tutmuyor; motor da çizici de harita
+    // yüklenmeden hiçbir şey okuyamaz.
     await this.view.init($<HTMLCanvasElement>('harita'));
-    // İmleç panellerin üstüne geçince harita ipucusu ekranda asılı kalmasın.
+
+    this.globe = new Globe($<HTMLCanvasElement>('kure'), {
+      onHover: () => {},
+      onPick: (th) => this.selectTheatre(th),
+    });
+    this.globe.setWar('ww1');
+    this.globe.start();
+
     for (const id of ['ustbar', 'panel', 'modlar', 'gunluk']) {
       $(id).addEventListener('pointerenter', () => {
         $('ipucu').hidden = true;
@@ -71,29 +91,127 @@ class Game {
     }
     this.buildModeButtons();
     this.bindChrome();
-    this.view.setState(this.state);
-    this.refresh();
+    this.buildTheatreList();
+    this.selectTheatre(THEATRE_BY_ID['ww1_canakkale']!);
 
-    $('taraf-sec').setAttribute('aria-busy', 'false');
+    $('acilis-durum').textContent =
+      'Harita: AWS Terrain Tiles (SRTM) · Sınırlar: historical-basemaps (CC-BY-SA) · '
+      + 'Yer adları: OpenStreetMap (ODbL)';
     for (const b of document.querySelectorAll<HTMLButtonElement>('.taraf')) {
       b.disabled = false;
     }
-    $('acilis-durum').textContent =
-      'Harita: AWS Terrain Tiles (SRTM) · Yer adları: OpenStreetMap (ODbL)';
   }
 
-  newCampaign(side: Side): void {
-    this.state = newGame(side);
+  /** Sol sütundaki cephe listesini seçili savaşa göre kur. */
+  private buildTheatreList(): void {
+    const box = $('cephe-liste');
+    box.innerHTML = '';
+    for (const th of THEATRES.filter((x) => x.war === this.war)) {
+      const b = document.createElement('button');
+      b.className = 'cephe';
+      b.dataset.cephe = th.id;
+      b.setAttribute('aria-pressed', String(th.id === this.theatre.id));
+      b.innerHTML =
+        `<span class="cp-ad">${esc(th.name)}</span>` +
+        `<span class="cp-alt">${esc(th.tagline)}</span>`;
+      b.addEventListener('click', () => this.selectTheatre(th));
+      box.appendChild(b);
+    }
+  }
+
+  /** Bir cepheyi seç: küreyi döndür, sağ paneli doldur. */
+  private selectTheatre(th: Theatre): void {
+    this.theatre = th;
+    if (this.globe) {
+      this.globe.selected = th;
+      this.globe.focus(th.pin[0], th.pin[1]);
+    }
+    for (const b of document.querySelectorAll<HTMLElement>('.cephe')) {
+      b.setAttribute('aria-pressed', String(b.dataset.cephe === th.id));
+    }
+    $('acilis-detay').hidden = false;
+    $('ad-tarih').textContent =
+      `${formatDate(th.start).toLocaleUpperCase('tr-TR')} — ` +
+      `${formatDate(th.end).toLocaleUpperCase('tr-TR')}`;
+    $('ad-ad').textContent = th.name;
+    $('ad-ozet').textContent = th.desc;
+    $('ad-taraf').innerHTML =
+      `<b>${esc(th.sides.a)}</b><br>karşı<br><b>${esc(th.sides.b)}</b>`;
+    $('taraf-a-ad').textContent = th.sides.a.toLocaleUpperCase('tr-TR');
+    $('taraf-b-ad').textContent = th.sides.b.toLocaleUpperCase('tr-TR');
+    const src = $<HTMLAnchorElement>('ad-kaynak');
+    src.href = th.src;
+    src.textContent = th.src;
+  }
+
+
+  /** Açılış ekranındaki senaryo açıklamasını ve taraf adlarını güncelle. */
+  private describeScenario(): void {
+    const world = this.kind === 'dunya';
+    $('acilis-tarih').textContent = world
+      ? '28 TEMMUZ 1914 — 11 KASIM 1918'
+      : '19 ŞUBAT 1915 — 9 OCAK 1916';
+    $('acilis-baslik').textContent = world ? 'BÜYÜK SAVAŞ 1914' : 'ÇANAKKALE 1915';
+    $('acilis-ozet').textContent = world
+      ? 'Bütün dünya. 4.575 il, 23 savaşan devlet, iki blok. Cepheler '
+        + 'Belçika\'dan Kilimanjaro\'ya kadar uzanıyor.'
+      : 'Birleşik Filo boğaz ağzında. Tabyalar mayın hatlarını koruyor, '
+        + 'mayın hatları tabyaları. Bu döngü kırılmazsa boğaz geçilmez.';
+    $('taraf-a-ad').textContent = world ? SIDE_LABEL_WORLD.ottoman : 'OSMANLI';
+    $('taraf-b-ad').textContent = world ? SIDE_LABEL_WORLD.entente : 'İTİLAF';
+    $('taraf-a-alt').textContent = world
+      ? 'Almanya, Avusturya-Macaristan, Osmanlı, Bulgaristan. İki cephede '
+        + 'savaş; ablukayı kır.'
+      : 'Boğazı savun. Mayın dök, tabyaları besle, çıkarmaları denize dök.';
+    $('taraf-b-alt').textContent = world
+      ? 'Britanya, Fransa, Rusya ve müttefikleri. Sayıca üstünsün ama '
+        + 'cephelerin dağınık.'
+      : 'Boğazı zorla. Mayınları tara, tabyaları sustur, Marmara\'ya çık.';
+  }
+
+  async newCampaign(side: Side): Promise<void> {
+    const th = this.theatre;
+    const useOwnMap = th.ownMap === 'canakkale';
+    this.kind = useOwnMap ? 'canakkale' : 'dunya';
+
+    $('acilis-durum').textContent = 'Harita yükleniyor…';
+    // SIRA ÖNEMLİ: eski durum yeni haritayla çizilirse prov() eski il
+    // kimliklerinde patlar. Önce durumu boşalt, sonra haritayı değiştir.
+    this.view.clearState();
     this.selection = null;
     this.pending = null;
     this.eventQueue = [];
+    $('panel').hidden = true;
+    $('ipucu').hidden = true;
+
+    // Küreye dalış + perdenin bulanıklaşarak çekilmesi. Harita arkada
+    // kurulurken geçiş oynuyor: bekleme hissi kayboluyor.
+    const dive = this.globe?.diveIn(th.pin[0], th.pin[1]) ?? Promise.resolve();
+    $('acilis').dataset.cikis = '1';
+    $('harita').dataset.giriyor = '1';
+
+    await loadMap(this.kind, useOwnMap ? undefined : th.bbox);
+    await this.view.buildMap();
+    setActiveScenario(null);
+    this.state = useOwnMap ? newGame(side) : newWorldGame(side, 19140728, th);
+
+    await dive;
+    this.globe?.stop();
+    $('acilis').hidden = true;
+    delete $('acilis').dataset.cikis;
+    delete $('harita').dataset.giriyor;
+    this.view.introSweep();
+    $('marka-ana').textContent = useOwnMap ? 'ÇANAKKALE' : th.name.toLocaleUpperCase('tr-TR');
+    $('marka-yil').textContent = th.start.slice(0, 4);
     this.view.selection = null;
     this.view.targeting = false;
     this.view.setState(this.state);
     this.refresh();
-    // Oyuncunun ilk bakışı kendi cephesine düşsün.
-    this.view.centreOn(side === 'ottoman' ? 'd_dar_bogaz' : 'd_bogaz_agzi');
+    if (useOwnMap) {
+      this.view.centreOn(side === 'ottoman' ? 'd_dar_bogaz' : 'd_bogaz_agzi');
+    }
   }
+
 
   // ───────────────────────────────────────────────────────── arayüz ──
 
@@ -146,13 +264,41 @@ class Game {
     for (const b of document.querySelectorAll<HTMLButtonElement>('.taraf')) {
       b.addEventListener('click', () => {
         $('acilis').hidden = true;
-        this.newCampaign(b.dataset.taraf as Side);
+        void this.newCampaign(b.dataset.taraf as Side);
+      });
+    }
+
+    for (const b of document.querySelectorAll<HTMLButtonElement>('.savas')) {
+      b.addEventListener('click', () => {
+        const war = b.dataset.savas as WarId;
+        if (war === this.war) return;
+        this.war = war;
+        for (const o of document.querySelectorAll('.savas')) {
+          o.setAttribute('aria-pressed', String(o === b));
+        }
+        this.globe?.setWar(war);
+        const first = THEATRES.find((x) => x.war === war)!;
+        this.buildTheatreList();
+        this.selectTheatre(first);
+      });
+    }
+
+    for (const b of document.querySelectorAll<HTMLButtonElement>('.senaryo')) {
+      b.addEventListener('click', () => {
+        const kind = b.dataset.senaryo as MapKind;
+        if (kind === this.kind) return;
+        this.kind = kind;
+        for (const o of document.querySelectorAll('.senaryo')) {
+          o.setAttribute('aria-pressed', String(o === b));
+        }
+        this.describeScenario();
       });
     }
 
     $('son-yeniden').addEventListener('click', () => {
       $('son-katman').hidden = true;
       $('acilis').hidden = false;
+      this.globe?.start();
     });
   }
 
@@ -226,10 +372,10 @@ class Game {
         const f = u.embarkedIn ? s.fleets[u.embarkedIn] : null;
         if (f) for (const n of prov(f.location).neighbours) if (!prov(n).isSea) out.add(n);
       } else {
-        for (const q of MAP.provinces) if (!q.isSea) out.add(q.id);
+        for (const q of provinces()) if (!q.isSea) out.add(q.id);
       }
     } else {
-      for (const q of MAP.provinces) if (q.isSea) out.add(q.id);
+      for (const q of provinces()) if (q.isSea) out.add(q.id);
     }
     return out;
   }
@@ -278,7 +424,18 @@ class Game {
     if (this.state.outcome) return;
     if (this.eventQueue.length > 0) return;
     this.cancelTargeting();
-    endTurn(this.state);
+
+    const btn = $<HTMLButtonElement>('tur-bitir');
+    btn.dataset.calisiyor = '1';
+    const { reports } = endTurn(this.state);
+    delete btn.dataset.calisiyor;
+
+    // Çarpışma olan iller kısa süre parlasın: nerede ne olduğu görünsün.
+    const hot = reports
+      .filter((r) => r.kind === 'kara' || r.kind === 'mayin' || r.kind === 'tabya')
+      .map((r) => r.province);
+    if (hot.length > 0) this.view.flashCombat(hot);
+
     this.eventQueue = [...this.state.pendingEvents];
     this.state.pendingEvents = [];
     this.refresh();
@@ -300,7 +457,7 @@ class Game {
     const myShips = Object.values(s.fleets)
       .filter((f) => f.side === s.playerSide)
       .reduce((n, f) => n + liveShips(f).length, 0);
-    const vp = MAP.provinces
+    const vp = provinces()
       .filter((p) => s.provinces[p.id]!.controller === s.playerSide)
       .reduce((n, p) => n + p.victoryPoints, 0);
     const mines = Object.values(s.minefields)
@@ -316,8 +473,16 @@ class Game {
             : `<span class="cubuk ${barCls}"><i style="width:${barPct}%"></i></span>`
         }</div>`;
 
-    $('olculer').innerHTML = [
-      metric('TARAF', s.playerSide === 'ottoman' ? 'OSMANLI' : 'İTİLAF', 'vurgu'),
+    const onceki = this.oncekiOlcu;
+    const simdiki: Record<string, string> = {};
+    const rows = [
+      metric(
+        'TARAF',
+        (s.playerSide === 'ottoman' ? this.theatre.sides.a : this.theatre.sides.b)
+          .toLocaleUpperCase('tr-TR')
+          .slice(0, 22),
+        'vurgu',
+      ),
       metric(
         'MORAL',
         `%${Math.round(me.morale * 100)}`,
@@ -332,7 +497,21 @@ class Game {
       metric('MAYIN', num(mines)),
       metric('ZAFER PUANI', String(vp), 'vurgu'),
       metric('DÜŞMAN MORALİ', `%${Math.round(foe.morale * 100)}`),
-    ].join('');
+    ];
+    $('olculer').innerHTML = rows.join('');
+
+    // Değişen sayıları kısa bir vurguyla işaretle — tur sonunda neyin
+    // oynadığı gözden kaçmasın.
+    for (const el of $('olculer').querySelectorAll<HTMLElement>('.olcu')) {
+      const ad = el.querySelector('.olcu-ad')?.textContent ?? '';
+      const dg = el.querySelector<HTMLElement>('.olcu-deger');
+      if (!dg) continue;
+      simdiki[ad] = dg.textContent ?? '';
+      if (onceki[ad] !== undefined && onceki[ad] !== simdiki[ad]) {
+        dg.dataset.degisti = '1';
+      }
+    }
+    this.oncekiOlcu = simdiki;
 
     this.renderLog();
     this.view.setState(s);
@@ -422,4 +601,6 @@ class Game {
 }
 
 const game = new Game();
+// @ts-expect-error hata ayıklama kancası
+window.__game = game;
 void game.start();

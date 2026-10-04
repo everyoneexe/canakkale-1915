@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
+import { before, describe, it } from 'node:test';
 
-import { MAP, prov, provinceDist } from '../src/core/geo.ts';
+import { loadMap, prov, provinceDist, provinces } from '../src/core/geo.ts';
 import { TERRAINS } from '../src/data/units.ts';
 import { MINEFIELDS } from '../src/data/minefields.ts';
 import { FORTS } from '../src/data/forts.ts';
@@ -17,15 +17,20 @@ import { Rng } from '../src/engine/rng.ts';
  * yeniden yakalamak için var. Hiçbiri "fonksiyon çağrılıyor mu" testi değil.
  */
 
+// Harita artık tekil değil; her şeyden önce yüklenmeli.
+before(async () => {
+  await loadMap('canakkale');
+});
+
 describe('harita verisi', () => {
   it('her ilin en az bir komşusu var', () => {
-    for (const p of MAP.provinces) {
+    for (const p of provinces()) {
       assert.ok(p.neighbours.length > 0, `${p.id} komşusuz`);
     }
   });
 
   it('komşuluk simetrik', () => {
-    for (const p of MAP.provinces) {
+    for (const p of provinces()) {
       for (const n of p.neighbours) {
         assert.ok(
           prov(n).neighbours.includes(p.id),
@@ -36,8 +41,10 @@ describe('harita verisi', () => {
   });
 
   it('kara illeri deniz arazisi taşımaz', () => {
-    for (const p of MAP.provinces) {
-      assert.equal(TERRAINS[p.terrain].isSea, p.isSea, `${p.id} arazi/ortam uyumsuz`);
+    for (const p of provinces()) {
+      const prof = TERRAINS[p.terrain];
+      assert.ok(prof, `${p.id}: bilinmeyen arazi ${p.terrain}`);
+      assert.equal(prof.isSea, p.isSea, `${p.id} arazi/ortam uyumsuz`);
     }
   });
 

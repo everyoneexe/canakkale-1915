@@ -1,8 +1,9 @@
 <div align="center">
 
-# Çanakkale 1915
+# Çanakkale 1915 · Büyük Savaşlar
 
-**Tur tabanlı stratejik savaş oyunu.** 19 Şubat 1915 – 9 Ocak 1916, Çanakkale Boğazı.
+**Tur tabanlı stratejik savaş oyunu.** Küreyi döndür, bir cephe seç, oyna.
+İki dünya savaşı · 16 cephe · 4.575 il.
 
 [![Oyna](https://img.shields.io/badge/▶_OYNA-canlı_demo-ffc354?style=for-the-badge&labelColor=000000)](https://canakkale-1915.vercel.app)
 [![Kod MIT](https://img.shields.io/badge/kod-MIT-6e8fc0?style=flat-square&labelColor=000000)](LICENSE)
@@ -14,15 +15,38 @@
 
 ---
 
-Bir tur bir gündür. HOI4'ten alınan sistemler — cephe genişliği, organizasyon,
-siperlenme, tahkimat, ikmal ağı, komutan özellikleri, harita modları — günlük
-tur çözümüne uyarlanmıştır. HOI4'ün saatlik tick'i yerine burada tek bir gün
-24 muharebe saati sayılır.
+Oyun bir **küre** ile açılır: Dünya'yı döndürür, bir cepheye tıklar, tarafını
+seçersin. Bir tur bir gündür. HOI4'ten alınan sistemler — cephe genişliği,
+organizasyon, siperlenme, tahkimat, ikmal ağı, komutan özellikleri, harita
+modları — günlük tur çözümüne uyarlanmıştır.
 
 Harita uydurma değil: kıyı çizgisi ve rölyef **gerçek yükseklik verisinden**,
-yer adları ve tabya konumları **OpenStreetMap'ten** türetildi. Üretilen
-haritada Dar Boğaz 1,40 km ölçülüyor — kaynaklardaki 1.600 yarda (1.500 m) ile
-uyumlu.
+yer adları **OpenStreetMap'ten**, 1914 ve 1938 sınırları **tarihsel sınır
+veri setinden** türetildi. Üretilen Çanakkale haritasında Dar Boğaz 1,40 km
+ölçülüyor — kaynaklardaki 1.600 yarda (1.500 m) ile uyumlu.
+
+## Cepheler
+
+Her cephenin başlangıç ve bitiş tarihi birincil kronolojilerle birebirdir
+(`src/data/theatres.ts`, her kayıtta `src` alanı var).
+
+| Birinci Dünya Savaşı | Tarih | İkinci Dünya Savaşı | Tarih |
+| --- | --- | --- | --- |
+| Tüm Dünya | 28.07.1914 – 11.11.1918 | Tüm Dünya | 01.09.1939 – 02.09.1945 |
+| Batı Cephesi | 04.08.1914 – 11.11.1918 | Polonya Seferi | 01.09.1939 – 06.10.1939 |
+| Doğu Cephesi | 17.08.1914 – 03.03.1918 | Batı Avrupa 1940 | 10.05.1940 – 22.06.1940 |
+| **Çanakkale 1915** | 19.02.1915 – 09.01.1916 | Kuzey Afrika | 13.09.1940 – 13.05.1943 |
+| İtalyan Cephesi | 23.05.1915 – 04.11.1918 | Doğu Cephesi | 22.06.1941 – 08.05.1945 |
+| Balkan Cephesi | 28.07.1914 – 11.11.1918 | Pasifik Savaşı | 07.12.1941 – 02.09.1945 |
+| Orta Doğu | 05.11.1914 – 30.10.1918 | İtalya Seferi | 10.07.1943 – 02.05.1945 |
+| Doğu Afrika | 03.08.1914 – 25.11.1918 | Normandiya | 06.06.1944 – 08.05.1945 |
+
+**Çanakkale 1915** kendi yüksek çözünürlüklü haritasını kullanır (47 il,
+29 m/piksel rölyef, tabyalar, mayın hatları, çıkarma sahilleri). Diğer
+cepheler dünya haritasının (4.575 il) ilgili dikdörtgenine kırpılır.
+
+Uluslar yalnız savaşta oldukları aralıkta sahaya çıkar: 1941 Doğu
+Cephesi'nde Polonya tümeni yoktur, çünkü Polonya 6 Ekim 1939'da yenilmişti.
 
 ```bash
 git clone https://github.com/everyoneexe/canakkale-1915.git
@@ -85,10 +109,17 @@ Tarihsel kilit döngü birebir modellenmiştir:
 
 ```bash
 python3 -m venv .venv && .venv/bin/pip install numpy scipy pillow scikit-image
-python3 tools/fetch_terrain.py    # AWS Terrain Tiles z12, ~360 karo
-python3 tools/geocode.py          # yer adları  -> tools/data/places.json
-python3 tools/geocode_forts.py    # tabyalar    -> tools/data/forts_geo.json
+
+# Çanakkale (47 il, 29 m/px)
+python3 tools/fetch_terrain.py          # AWS Terrain Tiles z12, 360 karo
+python3 tools/geocode.py                # yer adları -> tools/data/places.json
+python3 tools/geocode_forts.py          # tabyalar   -> tools/data/forts_geo.json
 .venv/bin/python tools/build_map.py
+
+# Dünya (4.575 il, ~5 km/px) ve küre
+.venv/bin/python tools/world/fetch_world_terrain.py   # z5, 1024 karo
+.venv/bin/python tools/world/build_world.py           # iller + 1914/1938 sahiplik
+.venv/bin/python tools/world/build_globe.py           # küre geometrisi
 ```
 
 * **Yükseklik ve kıyı çizgisi**: [AWS Terrain Tiles](https://registry.opendata.aws/terrain-tiles/)
@@ -106,6 +137,25 @@ python3 tools/geocode_forts.py    # tabyalar    -> tools/data/forts_geo.json
 Overpass API denendi ve kullanılamadı (ana sunucu dispatcher hatası veriyor,
 `overpass.osm.ch` yalnız İsviçre'yi kapsıyor). Yükseklik verisinden kıyı
 türetmek hem çalıştı hem de rölyefle %100 tutarlı sonuç verdi.
+
+### Dünya haritası
+
+* **İller**: Natural Earth 10m idari bölümler (4.596 birim, kamu malı).
+  Antarktika elenir, 6 hücreden küçükler atılır.
+* **Deniz illeri**: okyanus maskesi üzerinde ~900 km aralıklı tohumlardan
+  havza bölütlemesi (459 il), adları Natural Earth deniz çokgenlerinden.
+* **Sahiplik**: `world_1914` ve `world_1938` sınır dosyaları ayrı ayrı
+  rasterlenir; her ile iki yılın da sahibi yazılır. Veri setinin `SUBJECTO`
+  alanı sömürgelerde eksik (Filipinler, Uganda bağımsız görünüyor) —
+  `tools/world/nations_1914.py` ve `nations_1939.py` bu boşlukları kapatır.
+* **Rölyef**: gölgelendirme **Python'da** yapılıp WebP olarak paketlenir.
+  Tarayıcıda 7,6 milyon pikseli boyamak saniyeler sürüyordu ve PNG 10 MB
+  geliyordu; ön gölgelendirilmiş WebP 550 KB.
+* **Küre**: ayrı ve çok daha kaba geometri (107 kıyı halkası, 1.289 köşe,
+  88 KB) — 60 fps döndürme için il halkaları fazla ağır.
+
+Dünya verisi (2,9 MB) **ayrı bir pakete** bölünür ve yalnız bir dünya cephesi
+seçilince indirilir; Çanakkale oynayan hiç indirmez.
 
 ## Tarihsel kaynaklar
 
@@ -162,14 +212,31 @@ nasıl hâkim olduğu ancak böyle okunuyor.
 ## Mimari
 
 ```
-src/core/      types.ts (sözleşme) · geo.ts (izdüşüm, A*, çokgen)
-src/data/      tarihsel veri — her kayıt kaynaklı
-src/engine/    turn.ts (çözüm sırası) · combat · naval · air · supply · ai · orders
-src/render/    map.ts — Pixi katmanları
-src/ui/        panel.ts — seçim paneli
-tools/         harita derleme zinciri (Python)
+src/core/      types.ts (sözleşme) · geo.ts (harita yükleme, izdüşüm, A*)
+               heap.ts (A* için ikili yığın)
+src/data/      tarihsel veri — her kayıt kaynaklı · theatres.ts (16 cephe)
+src/engine/    turn.ts (çözüm sırası) · combat · naval · air · supply · orders
+               ai.ts (Çanakkale) · world-ai.ts (topolojik, harita bağımsız)
+               scenario.ts (Çanakkale) · world-scenario.ts (iki savaş)
+src/render/    map.ts — Pixi katmanları, animasyonlu kamera ve dolgular
+src/ui/        globe.ts (cephe seçim küresi) · panel.ts (seçim paneli)
+tools/         Çanakkale harita zinciri
+tools/world/   dünya + küre zinciri
 test/          regresyon testleri
 ```
+
+### Ölçek kararları
+
+4.575 il Çanakkale'nin 47 ilinden 97 kat büyük; birkaç yer yeniden yazıldı:
+
+| Sorun | Çözüm |
+| --- | --- |
+| A* açık kümesini doğrusal tarama | İkili yığın (`core/heap.ts`) |
+| Her karede 4.575 çokgeni yeniden kurma | Geometri bir kez kurulur, sonra yalnız `tint`/`alpha` |
+| Fare hareketinde tüm çokgenlerde nokta-içinde testi | Düzenli ızgara uzamsal indeks |
+| İkmal yayılımında döngü içi `sort()` | Min-yığın · **2063 ms → 97 ms/tur** |
+| İl başına tüm birlikleri tarayan görüş | Tur başında tek geçişte varlık kümesi |
+| Eşdikdörtgen koordinatlardan Öklit mesafe | Haversine (60° enlemde iki kat hata veriyordu) |
 
 Tur çözümü **deterministiktir**: aynı durum + aynı emirler = aynı sonuç. RNG
 durumu `GameState.rngState` içinde taşınır (`test/engine.test.ts`'te sabit).
