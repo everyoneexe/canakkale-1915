@@ -31,7 +31,9 @@ const SIDE_COLOUR: Readonly<Record<string, string>> = {
   itilaf: '#4f7fc4',
   eksen: '#c0453a',
   muttefik: '#4f7fc4',
-  tarafsiz: '#55503f',
+  // Koyu okyanus küresinin üstünde tarafsızlar neredeyse siyah kalıyordu;
+  // üç kategorinin ayırt edilmesi için belirgin haki.
+  tarafsiz: '#8c8257',
 };
 
 export interface GlobeCallbacks {
@@ -283,7 +285,7 @@ export class Globe {
       g.closePath();
       if (filled) {
         g.fillStyle = colour;
-        g.globalAlpha = poly.side === 'tarafsiz' ? 0.3 : 0.55;
+        g.globalAlpha = poly.side === 'tarafsiz' ? 0.45 : 0.62;
         g.fill();
         g.globalAlpha = 1;
       }
@@ -295,8 +297,8 @@ export class Globe {
 
   private drawCoast(): void {
     const g = this.ctx;
-    g.strokeStyle = 'rgba(217,164,65,0.72)';
-    g.lineWidth = 0.9;
+    g.strokeStyle = 'rgba(217,164,65,0.85)';
+    g.lineWidth = 1.0;
     for (const ring of DATA.coast) {
       g.beginPath();
       let started = false;
