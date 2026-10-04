@@ -907,12 +907,22 @@ body {
   justify-content: center;
   min-width: 0;
 }
-#kure {
+#kure,
+.kure-overlay {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   display: block;
-  cursor: grab;
   touch-action: none;
+}
+/* Küre WebGL; iğneler ve etiketler üstteki 2D katmanda. Girdi de
+   overlay'de toplanıyor, iki katman arasında olay bölünmesin. */
+.kure-overlay {
+  cursor: grab;
+}
+.kure-overlay:active {
+  cursor: grabbing;
 }
 .kure-ipucu {
   position: absolute;

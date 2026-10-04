@@ -1,85 +1,272 @@
-import globeData from '../data/globe.json';
 import { THEATRES } from '../data/theatres.ts';
 import type { Theatre, WarId } from '../data/theatres.ts';
-import { C, css } from '../style/tokens.ts';
 
 /**
- * Cephe seçim küresi.
+ * Cephe seçim küresi — WebGL2 ile GERÇEK küre.
  *
- * Ortografik izdüşüm — gerçek bir küre görünümü, sürükleyerek döndürülür.
- * Canvas2D kullanılır: tek seferlik bir ekran için Pixi kurmanın anlamı yok
- * ve geometri zaten kaba (107 kıyı halkası, 1.289 köşe).
+ * Önceki sürüm vektör çokgenlerini bir dairenin içine çiziyordu: düz, ölü,
+ * "daire içine basılmış harita" gibi. Burada ekran dörtgenine ortografik bir
+ * küre ışın-izi (raycast) yapılıp üstüne gerçek arazi dokusu kaplanıyor:
  *
- * Projeksiyon (λ: boylam, φ: enlem; λ0/φ0 kamera):
- *   cos c = sin φ0 · sin φ + cos φ0 · cos φ · cos(λ−λ0)
- *   görünür  ⟺  cos c > 0        (arka yüz çizilmez)
- *   x = R · cos φ · sin(λ−λ0)
- *   y = −R · (cos φ0 · sin φ − sin φ0 · cos φ · cos(λ−λ0))
+ *   · `world-relief.webp` — SRTM/ETOPO yüksekliğinden önceden gölgelendirilmiş
+ *     arazi ve batimetri (Python'da üretildi)
+ *   · `pol-ww1/ww2.webp`  — eşdikdörtgen siyasi maske, savaş başına
+ *   · güneş yönüne göre gündüz/gece terminatörü, gece tarafı mavimsi ve karanlık
+ *   · Fresnel atmosfer haresi ve dış korona
+ *
+ * Tek çizim çağrısı; döndürme ve yakınlaştırma GPU'da.
  */
 
 const D = Math.PI / 180;
-
-interface GlobeData {
-  coast: [number, number][][];
-  wars: Record<string, { side: string; ring: [number, number][] }[]>;
-}
-
-const DATA = globeData as unknown as GlobeData;
-
-const SIDE_COLOUR: Readonly<Record<string, string>> = {
-  ittifak: '#c0453a',
-  itilaf: '#4f7fc4',
-  eksen: '#c0453a',
-  muttefik: '#4f7fc4',
-  // Koyu okyanus küresinin üstünde tarafsızlar neredeyse siyah kalıyordu;
-  // üç kategorinin ayırt edilmesi için belirgin haki.
-  tarafsiz: '#8c8257',
-};
+/** Doku ±82° enlemle sınırlı (Mercator karolardan yeniden örneklendi). */
+const LAT_LIM = 82;
 
 export interface GlobeCallbacks {
   onHover(t: Theatre | null): void;
   onPick(t: Theatre): void;
 }
 
+const VERT = `#version 300 es
+in vec2 aPos;
+out vec2 vUv;
+void main() {
+  vUv = aPos;
+  gl_Position = vec4(aPos, 0.0, 1.0);
+}`;
+
+const FRAG = `#version 300 es
+precision highp float;
+
+in vec2 vUv;
+out vec4 outColor;
+
+uniform sampler2D uTerrain;   // eşdikdörtgen arazi (önceden gölgelendirilmiş)
+uniform sampler2D uPolitical; // eşdikdörtgen taraf maskesi
+uniform vec2  uRes;
+uniform vec2  uCentre;
+uniform float uRadius;
+uniform float uLon0;
+uniform float uLat0;
+uniform vec3  uSun;
+uniform float uPolMix;
+uniform float uLatLim;
+
+const float PI = 3.14159265359;
+
+void main() {
+  // Ekran uzayı: x sağa, ys YUKARI (gl_FragCoord yukarı artar).
+  vec2 frag = gl_FragCoord.xy;
+  float x = (frag.x - uCentre.x) / uRadius;
+  float ys = (frag.y - (uRes.y - uCentre.y)) / uRadius;
+  float r2 = x * x + ys * ys;
+
+  // ── Uzay + atmosfer koronası ───────────────────────────────────────
+  if (r2 > 1.0) {
+    float r = sqrt(r2);
+    float glow = exp(-(r - 1.0) * 16.0);
+    float lit = clamp(dot(normalize(vec3(x, ys, 0.0)), uSun) * 0.5 + 0.5, 0.0, 1.0);
+    vec3 air = vec3(0.26, 0.48, 0.92) * glow * (0.35 + 0.75 * lit);
+    outColor = vec4(air, glow * 0.95);
+    return;
+  }
+
+  float z = sqrt(max(0.0, 1.0 - r2));
+
+  // ── TERS ORTOGRAFİK ───────────────────────────────────────────────
+  // İleri izdüşüm (iğneler için JS'te de aynısı):
+  //   sx = cos(lat)·sin(lon−lon0)
+  //   sy = cos(lat0)·sin(lat) − sin(lat0)·cos(lat)·cos(lon−lon0)
+  //   z  = sin(lat0)·sin(lat) + cos(lat0)·cos(lat)·cos(lon−lon0)
+  // Tersi (c = asin(ρ), cos c = z, sin c = ρ sadeleşince):
+  float s0 = sin(uLat0), c0 = cos(uLat0);
+  float lat = asin(clamp(z * s0 + ys * c0, -1.0, 1.0));
+  float lon = uLon0 + atan(x, z * c0 - ys * s0);
+
+  // ── Doku örnekleme ────────────────────────────────────────────────
+  float u = fract(lon / (2.0 * PI) + 0.5);
+  float v = (uLatLim - lat) / (2.0 * uLatLim);
+  // Kutuplarda doku yok: kenar satırını uzat, sonra buza karıştır.
+  // Doku ±82° ile sınırlı. Kutup bölgesini DÜZ beyaza boyamak kuzeyde
+  // kocaman, keskin kenarlı bir elips bırakıyordu. Bunun yerine dokunun
+  // kenar satırı uzatılır (clamp) ve üstüne çok hafif bir buz tonu gelir;
+  // 82° kuzeyi zaten deniz buzu olduğu için doğal duruyor.
+  float polar = (smoothstep(-0.01, -0.09, v) + smoothstep(1.01, 1.09, v)) * 0.30;
+  vec2 uv = vec2(u, clamp(v, 0.0, 1.0));
+
+  // Doku düz haritanın koyu zemini için üretildi; kürede daha parlak olmalı.
+  vec3 base = texture(uTerrain, uv).rgb * 2.05;
+  vec3 pol = texture(uPolitical, uv).rgb;
+  float has = step(0.02, max(pol.r, max(pol.g, pol.b)));
+
+  // Siyasi renk DÜZ bir boya değil: arazinin parlaklığıyla modüle edilir.
+  // Böylece dağlar, çöller ve sırtlar taraf renginin altında görünmeye
+  // devam eder — Paradox harita modlarının yaptığı şey.
+  float lum = dot(base, vec3(0.299, 0.587, 0.114));
+  vec3 politicalShaded = pol * (0.42 + 1.55 * lum);
+  base = mix(base, politicalShaded, has * uPolMix);
+  base = mix(base, vec3(0.72, 0.78, 0.84), clamp(polar, 0.0, 1.0));
+
+  // ── Aydınlatma ────────────────────────────────────────────────────
+  vec3 w = vec3(cos(lat) * sin(lon), sin(lat), cos(lat) * cos(lon));
+  float ndl = dot(w, uSun);
+  float day = smoothstep(-0.20, 0.25, ndl);
+  vec3 night = base * 0.17 + vec3(0.010, 0.018, 0.045);
+  vec3 col = mix(night, base * (0.60 + 0.60 * max(ndl, 0.0)), day);
+
+  // Alacakaranlık çizgisi.
+  col += vec3(0.52, 0.26, 0.10) * exp(-pow((ndl + 0.02) * 7.5, 2.0)) * 0.40;
+
+  // ── Atmosfer: kenara doğru mavi saçılma ───────────────────────────
+  // Okyanus, İtilaf mavisinden ayrışsın diye hafifçe koyultulur.
+  float landish = step(0.02, max(pol.r, max(pol.g, pol.b)));
+  col *= mix(0.88, 1.0, landish);
+
+  float fres = pow(1.0 - z, 3.0);
+  col += vec3(0.20, 0.42, 0.85) * fres * (0.30 + 0.70 * day);
+  col *= 1.0 - 0.22 * pow(1.0 - z, 7.0);
+
+  outColor = vec4(col, 1.0);
+}`;
+
+
+function compile(gl: WebGL2RenderingContext, type: number, src: string): WebGLShader {
+  const sh = gl.createShader(type)!;
+  gl.shaderSource(sh, src);
+  gl.compileShader(sh);
+  if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+    throw new Error(`gölgelendirici derlenmedi: ${gl.getShaderInfoLog(sh)}`);
+  }
+  return sh;
+}
+
+async function loadTexture(
+  gl: WebGL2RenderingContext,
+  url: string,
+): Promise<WebGLTexture> {
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  await new Promise<void>((ok, fail) => {
+    img.onload = () => ok();
+    img.onerror = () => fail(new Error(`doku yüklenemedi: ${url}`));
+    img.src = url;
+  });
+  const tex = gl.createTexture()!;
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+  // Boylamda sar (±180 dikişi), enlemde kenara sıkıştır.
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.generateMipmap(gl.TEXTURE_2D);
+  return tex;
+}
+
 export class Globe {
   private cv: HTMLCanvasElement;
-  private ctx: CanvasRenderingContext2D;
+  private gl: WebGL2RenderingContext;
   private cb: GlobeCallbacks;
 
-  /** Kamera merkezi. */
+  /** İğne ve etiket katmanı — küre WebGL, işaretler 2D üstte. */
+  private overlay: HTMLCanvasElement;
+  private octx: CanvasRenderingContext2D;
+
+  private prog!: WebGLProgram;
+  private loc: Record<string, WebGLUniformLocation | null> = {};
+  private terrain: WebGLTexture | null = null;
+  private political: Record<string, WebGLTexture> = {};
+  private ready = false;
+
   private lon0 = 14;
   private lat0 = 32;
-  private radius = 220;
+  private radius = 240;
   private cx = 0;
   private cy = 0;
 
   private war: WarId = 'ww1';
+  selected: Theatre | null = null;
+
   private dragging = false;
   private last = { x: 0, y: 0 };
   private moved = 0;
   private hovered: Theatre | null = null;
   private spin = true;
-  /** Yumuşatılacak kamera hedefi. */
+  private raf = 0;
   private target: { lon: number; lat: number } | null = null;
   private reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   private lastT = 0;
-  private raf = 0;
-  /** Ekran konumları — tıklama isabeti için her karede güncellenir. */
   private pins: { t: Theatre; x: number; y: number }[] = [];
 
   constructor(canvas: HTMLCanvasElement, cb: GlobeCallbacks) {
     this.cv = canvas;
     this.cb = cb;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) throw new Error('2D bağlamı alınamadı');
-    this.ctx = ctx;
+    const gl = canvas.getContext('webgl2', {
+      alpha: true,
+      antialias: true,
+      premultipliedAlpha: false,
+    });
+    if (!gl) throw new Error('WebGL2 yok');
+    this.gl = gl;
+
+    // İğneler için üstte saydam 2D katman.
+    this.overlay = document.createElement('canvas');
+    this.overlay.className = 'kure-overlay';
+    canvas.parentElement?.appendChild(this.overlay);
+    this.octx = this.overlay.getContext('2d')!;
+
+    this.initGl();
     this.bind();
     this.resize();
     window.addEventListener('resize', () => this.resize());
   }
 
-  /** Listede seçili cephe — kürede nabızla işaretlenir. */
-  selected: Theatre | null = null;
+  private initGl(): void {
+    const gl = this.gl;
+    const prog = gl.createProgram()!;
+    gl.attachShader(prog, compile(gl, gl.VERTEX_SHADER, VERT));
+    gl.attachShader(prog, compile(gl, gl.FRAGMENT_SHADER, FRAG));
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+      throw new Error(`program bağlanmadı: ${gl.getProgramInfoLog(prog)}`);
+    }
+    this.prog = prog;
+    gl.useProgram(prog);
+
+    const quad = new Float32Array([-1, -1, 3, -1, -1, 3]);
+    const vao = gl.createVertexArray();
+    gl.bindVertexArray(vao);
+    const buf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, quad, gl.STATIC_DRAW);
+    const aPos = gl.getAttribLocation(prog, 'aPos');
+    gl.enableVertexAttribArray(aPos);
+    gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+    for (const n of [
+      'uTerrain', 'uPolitical', 'uRes', 'uCentre', 'uRadius',
+      'uLon0', 'uLat0', 'uSun', 'uPolMix', 'uLatLim',
+    ]) {
+      this.loc[n] = gl.getUniformLocation(prog, n);
+    }
+    gl.uniform1i(this.loc['uTerrain']!, 0);
+    gl.uniform1i(this.loc['uPolitical']!, 1);
+    gl.uniform1f(this.loc['uLatLim']!, LAT_LIM * D);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  }
+
+  /** Dokular inene kadar küre çizilmez. */
+  async load(): Promise<void> {
+    const gl = this.gl;
+    const [terrain, ww1, ww2] = await Promise.all([
+      loadTexture(gl, 'world-relief.webp'),
+      loadTexture(gl, 'pol-ww1.webp'),
+      loadTexture(gl, 'pol-ww2.webp'),
+    ]);
+    this.terrain = terrain;
+    this.political = { ww1, ww2 };
+    this.ready = true;
+  }
 
   setWar(war: WarId): void {
     this.war = war;
@@ -87,12 +274,9 @@ export class Globe {
     if (first) this.focus(first.pin[0], first.pin[1]);
   }
 
-  /**
-   * Belirli bir noktayı öne döndür — SIÇRAMADAN. Hedef saklanır, her kare
-   * kısa yoldan yumuşatılır (±180° sarmasını doğru çözerek).
-   */
+  /** Noktayı öne döndür — sıçramadan, ±180 sarmasını kısa yoldan çözerek. */
   focus(lon: number, lat: number): void {
-    this.target = { lon, lat: Math.max(-70, Math.min(70, lat)) };
+    this.target = { lon, lat: Math.max(-72, Math.min(72, lat)) };
     this.spin = false;
     if (this.reduced) {
       this.lon0 = lon;
@@ -101,19 +285,17 @@ export class Globe {
     }
   }
 
-  /** Cephe seçilip oyun başlarken: küreye dalış hissi. */
+  /** Cephe seçilip oyun başlarken: küreye dalış. */
   async diveIn(lon: number, lat: number): Promise<void> {
     this.focus(lon, lat);
     if (this.reduced) return;
     const from = this.radius;
-    const to = from * 2.6;
+    const to = from * 2.8;
     const t0 = performance.now();
     await new Promise<void>((done) => {
       const step = () => {
-        const u = Math.min(1, (performance.now() - t0) / 420);
-        // ease-out: başta hızlı, sonda yavaş — anında tepki hissi.
-        const e = 1 - (1 - u) ** 3;
-        this.radius = from + (to - from) * e;
+        const u = Math.min(1, (performance.now() - t0) / 460);
+        this.radius = from + (to - from) * (1 - (1 - u) ** 3);
         if (u < 1) requestAnimationFrame(step);
         else done();
       };
@@ -129,10 +311,9 @@ export class Globe {
       this.lastT = now;
 
       if (this.target && !this.dragging) {
-        // ±180° sarmasında kısa yoldan git.
-        let d = ((this.target.lon - this.lon0 + 540) % 360) - 180;
-        const k = 1 - Math.exp(-dt / 170);
+        const d = ((this.target.lon - this.lon0 + 540) % 360) - 180;
         const dLat = this.target.lat - this.lat0;
+        const k = 1 - Math.exp(-dt / 170);
         if (Math.abs(d) < 0.25 && Math.abs(dLat) < 0.25) {
           this.lon0 = this.target.lon;
           this.lat0 = this.target.lat;
@@ -142,8 +323,9 @@ export class Globe {
           this.lat0 += dLat * k;
         }
       } else if (this.spin && !this.dragging) {
-        this.lon0 = (this.lon0 + dt * 0.004) % 360;
+        this.lon0 = (this.lon0 + dt * 0.0035) % 360;
       }
+
       this.draw();
       this.raf = requestAnimationFrame(loop);
     };
@@ -158,12 +340,16 @@ export class Globe {
   private resize(): void {
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     const rect = this.cv.getBoundingClientRect();
-    this.cv.width = Math.round(rect.width * dpr);
-    this.cv.height = Math.round(rect.height * dpr);
-    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    for (const c of [this.cv, this.overlay]) {
+      c.width = Math.max(1, Math.round(rect.width * dpr));
+      c.height = Math.max(1, Math.round(rect.height * dpr));
+    }
+    this.overlay.style.width = `${rect.width}px`;
+    this.overlay.style.height = `${rect.height}px`;
+    this.octx.setTransform(dpr, 0, 0, dpr, 0, 0);
     this.cx = rect.width / 2;
     this.cy = rect.height / 2;
-    this.radius = Math.min(rect.width, rect.height) * 0.43;
+    this.radius = Math.min(rect.width, rect.height) * 0.42;
   }
 
   // ───────────────────────────────────────────────────── izdüşüm ────
@@ -175,7 +361,9 @@ export class Globe {
     const cosc = Math.sin(p0) * Math.sin(p) + Math.cos(p0) * Math.cos(p) * Math.cos(l);
     return {
       x: this.cx + this.radius * Math.cos(p) * Math.sin(l),
-      y: this.cy - this.radius * (Math.cos(p0) * Math.sin(p) - Math.sin(p0) * Math.cos(p) * Math.cos(l)),
+      y:
+        this.cy -
+        this.radius * (Math.cos(p0) * Math.sin(p) - Math.sin(p0) * Math.cos(p) * Math.cos(l)),
       vis: cosc > 0,
     };
   }
@@ -183,144 +371,47 @@ export class Globe {
   // ───────────────────────────────────────────────────────── çizim ──
 
   private draw(): void {
-    const g = this.ctx;
-    const r = this.radius;
-    g.clearRect(0, 0, this.cv.width, this.cv.height);
+    const gl = this.gl;
+    const dpr = this.cv.width / Math.max(1, this.cv.getBoundingClientRect().width);
+    gl.viewport(0, 0, this.cv.width, this.cv.height);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
 
-    // Okyanus küresi + ince ışık kenarı.
-    g.beginPath();
-    g.arc(this.cx, this.cy, r, 0, Math.PI * 2);
-    const grad = g.createRadialGradient(
-      this.cx - r * 0.35,
-      this.cy - r * 0.4,
-      r * 0.1,
-      this.cx,
-      this.cy,
-      r,
-    );
-    grad.addColorStop(0, '#0b1424');
-    grad.addColorStop(0.75, '#04080f');
-    grad.addColorStop(1, '#010306');
-    g.fillStyle = grad;
-    g.fill();
+    if (this.ready && this.terrain) {
+      gl.useProgram(this.prog);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, this.terrain);
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, this.political[this.war] ?? this.terrain);
 
-    this.drawGraticule();
-    this.drawRings(DATA.wars[this.war] ?? [], true);
-    this.drawCoast();
+      gl.uniform2f(this.loc['uRes']!, this.cv.width, this.cv.height);
+      gl.uniform2f(this.loc['uCentre']!, this.cx * dpr, this.cy * dpr);
+      gl.uniform1f(this.loc['uRadius']!, this.radius * dpr);
+      gl.uniform1f(this.loc['uLon0']!, this.lon0 * D);
+      gl.uniform1f(this.loc['uLat0']!, this.lat0 * D);
+      gl.uniform1f(this.loc['uPolMix']!, 1.0);
 
-    // Kenar halkası — videodaki amber çizgi dili.
-    g.beginPath();
-    g.arc(this.cx, this.cy, r, 0, Math.PI * 2);
-    g.strokeStyle = 'rgba(217,164,65,0.55)';
-    g.lineWidth = 1.2;
-    g.stroke();
+      // Güneş kameranın hafif sol üstünden: terminatör hep kadrajda kalsın.
+      const sl = (this.lon0 + 38) * D;
+      const sp = 16 * D;
+      gl.uniform3f(
+        this.loc['uSun']!,
+        Math.cos(sp) * Math.sin(sl),
+        Math.sin(sp),
+        Math.cos(sp) * Math.cos(sl),
+      );
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    }
 
     this.drawPins();
   }
 
-  private drawGraticule(): void {
-    const g = this.ctx;
-    g.strokeStyle = 'rgba(138,106,46,0.18)';
-    g.lineWidth = 0.6;
-    for (let lat = -60; lat <= 60; lat += 30) {
-      g.beginPath();
-      let started = false;
-      for (let lon = -180; lon <= 180; lon += 4) {
-        const p = this.project(lon, lat);
-        if (!p.vis) {
-          started = false;
-          continue;
-        }
-        if (started) g.lineTo(p.x, p.y);
-        else {
-          g.moveTo(p.x, p.y);
-          started = true;
-        }
-      }
-      g.stroke();
-    }
-    for (let lon = -180; lon < 180; lon += 30) {
-      g.beginPath();
-      let started = false;
-      for (let lat = -80; lat <= 80; lat += 4) {
-        const p = this.project(lon, lat);
-        if (!p.vis) {
-          started = false;
-          continue;
-        }
-        if (started) g.lineTo(p.x, p.y);
-        else {
-          g.moveTo(p.x, p.y);
-          started = true;
-        }
-      }
-      g.stroke();
-    }
-  }
-
-  private drawRings(
-    polys: { side: string; ring: [number, number][] }[],
-    filled: boolean,
-  ): void {
-    const g = this.ctx;
-    for (const poly of polys) {
-      const colour = SIDE_COLOUR[poly.side] ?? '#55503f';
-      g.beginPath();
-      let started = false;
-      let any = false;
-      for (const [lon, lat] of poly.ring) {
-        const p = this.project(lon, lat);
-        if (!p.vis) {
-          started = false;
-          continue;
-        }
-        any = true;
-        if (started) g.lineTo(p.x, p.y);
-        else {
-          g.moveTo(p.x, p.y);
-          started = true;
-        }
-      }
-      if (!any) continue;
-      g.closePath();
-      if (filled) {
-        g.fillStyle = colour;
-        g.globalAlpha = poly.side === 'tarafsiz' ? 0.45 : 0.62;
-        g.fill();
-        g.globalAlpha = 1;
-      }
-      g.strokeStyle = 'rgba(0,0,0,0.5)';
-      g.lineWidth = 0.5;
-      g.stroke();
-    }
-  }
-
-  private drawCoast(): void {
-    const g = this.ctx;
-    g.strokeStyle = 'rgba(217,164,65,0.85)';
-    g.lineWidth = 1.0;
-    for (const ring of DATA.coast) {
-      g.beginPath();
-      let started = false;
-      for (const [lon, lat] of ring) {
-        const p = this.project(lon, lat);
-        if (!p.vis) {
-          started = false;
-          continue;
-        }
-        if (started) g.lineTo(p.x, p.y);
-        else {
-          g.moveTo(p.x, p.y);
-          started = true;
-        }
-      }
-      g.stroke();
-    }
-  }
-
   private drawPins(): void {
-    const g = this.ctx;
+    const g = this.octx;
+    const rect = this.cv.getBoundingClientRect();
+    g.clearRect(0, 0, rect.width, rect.height);
     this.pins = [];
+
     for (const t of THEATRES) {
       if (t.war !== this.war) continue;
       const p = this.project(t.pin[0], t.pin[1]);
@@ -329,34 +420,34 @@ export class Globe {
 
       const on = this.hovered?.id === t.id;
       const sel = this.selected?.id === t.id;
-      // Seçili iğne yavaşça nabız atar: gözün nereye bakacağını söyler.
-      const pulse = sel ? 1 + Math.sin(performance.now() / 420) * 0.16 : 1;
+      const pulse = sel ? 1 + Math.sin(performance.now() / 420) * 0.18 : 1;
       const rad = (on ? 8 : sel ? 7 : 5) * pulse;
 
-      // Halo
       g.beginPath();
-      g.arc(p.x, p.y, rad + 6, 0, Math.PI * 2);
-      g.fillStyle = on ? 'rgba(255,195,84,0.22)' : 'rgba(255,195,84,0.08)';
+      g.arc(p.x, p.y, rad + 7, 0, Math.PI * 2);
+      g.fillStyle = on ? 'rgba(255,195,84,0.26)' : 'rgba(255,195,84,0.10)';
       g.fill();
 
       g.beginPath();
       g.arc(p.x, p.y, rad, 0, Math.PI * 2);
-      g.fillStyle = css(C.accent);
+      g.fillStyle = '#ffc354';
       g.fill();
-      g.strokeStyle = '#120d02';
-      g.lineWidth = 1.4;
+      g.strokeStyle = 'rgba(10,8,2,0.9)';
+      g.lineWidth = 1.5;
       g.stroke();
 
       if (on) {
-        g.font = '600 12px "JetBrains Mono", monospace';
-        g.fillStyle = css(C.text);
-        g.textAlign = 'center';
         const label = t.name.toLocaleUpperCase('tr-TR');
+        g.font = '600 12px "JetBrains Mono", monospace';
+        g.textAlign = 'center';
         const w = g.measureText(label).width;
-        g.fillStyle = 'rgba(0,0,0,0.82)';
-        g.fillRect(p.x - w / 2 - 7, p.y - rad - 26, w + 14, 19);
-        g.fillStyle = css(C.accent);
-        g.fillText(label, p.x, p.y - rad - 12);
+        g.fillStyle = 'rgba(0,0,0,0.85)';
+        g.fillRect(p.x - w / 2 - 8, p.y - rad - 28, w + 16, 20);
+        g.strokeStyle = 'rgba(255,195,84,0.45)';
+        g.lineWidth = 1;
+        g.strokeRect(p.x - w / 2 - 8, p.y - rad - 28, w + 16, 20);
+        g.fillStyle = '#ffc354';
+        g.fillText(label, p.x, p.y - rad - 14);
       }
     }
   }
@@ -364,50 +455,54 @@ export class Globe {
   // ───────────────────────────────────────────────────────── girdi ──
 
   private bind(): void {
-    this.cv.addEventListener('pointerdown', (e) => {
+    const el = this.overlay;
+    el.addEventListener('pointerdown', (e) => {
       this.dragging = true;
       this.spin = false;
+      this.target = null;
       this.moved = 0;
       this.last = { x: e.offsetX, y: e.offsetY };
-      this.cv.setPointerCapture(e.pointerId);
+      el.setPointerCapture(e.pointerId);
     });
 
-    this.cv.addEventListener('pointerup', (e) => {
+    el.addEventListener('pointerup', (e) => {
       this.dragging = false;
       if (this.moved > 5) return;
       const hit = this.hitTest(e.offsetX, e.offsetY);
       if (hit) this.cb.onPick(hit);
     });
 
-    this.cv.addEventListener('pointerleave', () => {
+    el.addEventListener('pointerleave', () => {
       this.dragging = false;
       this.hovered = null;
       this.cb.onHover(null);
     });
 
-    this.cv.addEventListener('pointermove', (e) => {
+    el.addEventListener('pointermove', (e) => {
       if (this.dragging) {
         const dx = e.offsetX - this.last.x;
         const dy = e.offsetY - this.last.y;
         this.moved += Math.abs(dx) + Math.abs(dy);
-        this.lon0 -= dx * 0.32;
-        this.lat0 = Math.max(-78, Math.min(78, this.lat0 + dy * 0.32));
+        this.lon0 -= dx * 0.3;
+        this.lat0 = Math.max(-80, Math.min(80, this.lat0 + dy * 0.3));
         this.last = { x: e.offsetX, y: e.offsetY };
         return;
       }
       const hit = this.hitTest(e.offsetX, e.offsetY);
       if (hit?.id !== this.hovered?.id) {
         this.hovered = hit;
-        this.cv.style.cursor = hit ? 'pointer' : 'grab';
+        el.style.cursor = hit ? 'pointer' : 'grab';
         this.cb.onHover(hit);
       }
     });
 
-    this.cv.addEventListener(
+    el.addEventListener(
       'wheel',
       (e) => {
         e.preventDefault();
-        this.radius = Math.max(120, Math.min(900, this.radius * Math.exp(-e.deltaY * 0.0012)));
+        const rect = this.cv.getBoundingClientRect();
+        const max = Math.min(rect.width, rect.height) * 1.6;
+        this.radius = Math.max(110, Math.min(max, this.radius * Math.exp(-e.deltaY * 0.0012)));
       },
       { passive: false },
     );
@@ -415,7 +510,7 @@ export class Globe {
 
   private hitTest(x: number, y: number): Theatre | null {
     let best: Theatre | null = null;
-    let bestD = 16 * 16;
+    let bestD = 17 * 17;
     for (const p of this.pins) {
       const d = (p.x - x) ** 2 + (p.y - y) ** 2;
       if (d < bestD) {

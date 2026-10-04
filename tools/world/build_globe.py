@@ -17,6 +17,8 @@ import math
 import os
 import sys
 
+from datetime import date
+
 import numpy as np
 from PIL import Image, ImageDraw
 from skimage import measure
@@ -27,6 +29,9 @@ sys.path.insert(0, HERE)
 
 ELEV = os.path.join(HERE, "data", "world_elev.npz")
 OUT = os.path.join(ROOT, "src", "data", "globe.json")
+PUBLIC = os.path.join(ROOT, "public")
+# Siyasi maske çözünürlüğü — küre dokusu olarak örnekleniyor.
+POL_W, POL_H = 2048, 932
 
 LAT_LIM = 82.0
 # Kıyı sadeleştirme (derece). 0.9° ≈ 100 km — küre ölçeğinde fazlasıyla yeterli.
@@ -35,9 +40,13 @@ COAST_TOL = 0.9
 MIN_RING = 14
 
 # Her savaş için sınır dosyası ve taraf tablosu.
+# Küre savaşın BAŞLANGIÇ gününü gösterir: sonradan katılan devletler o gün
+# tarafsızdı. ABD'yi 1914 küresinde İtilaf renginde göstermek yanlış olur.
 WARS = {
-    "ww1": {"file": "world_1914.geojson", "module": "nations_1914"},
-    "ww2": {"file": "world_1938.geojson", "module": "nations_1939"},
+    "ww1": {"file": "world_1914.geojson", "module": "nations_1914",
+            "start": "1914-07-28"},
+    "ww2": {"file": "world_1938.geojson", "module": "nations_1939",
+            "start": "1939-09-01"},
 }
 
 
@@ -136,11 +145,19 @@ def main() -> None:
         with open(path, encoding="utf-8") as fh:
             feats = json.load(fh)["features"]
 
+        start = cfg["start"]
         polys = []
         for f in feats:
             pr = f["properties"]
             sov = mod.sovereign_of(pr.get("NAME") or "", pr.get("SUBJECTO"), pr.get("PARTOF"))
-            side, _ = mod.faction_of(sov)
+            side, joins = mod.faction_of(sov)
+            # Savaşın AÇILIŞINDA tarafsız olanlar tarafsız gösterilir.
+            # 60 günlük pay var: Britanya ve Fransa 3 Eylül 1939'da, yani
+            # savaştan iki gün sonra girdi; onları tarafsız göstermek
+            # 1939 küresini boş bırakıyordu. ABD (1917) ya da Japonya
+            # (1941) gibi yıllar sonra girenler tarafsız kalır.
+            if joins and (date.fromisoformat(joins) - date.fromisoformat(start)).days > 60:
+                side = "tarafsiz"
             for ring in rings_of(f["geometry"]):
                 if ring_area(ring) < 2.0:  # ~2 derece-kare altını atla
                     continue
@@ -159,6 +176,32 @@ def main() -> None:
         for p in polys:
             n_by[p["side"]] = n_by.get(p["side"], 0) + 1
         print(f"{war}: {len(polys)} çokgen {n_by}")
+
+    # ── Siyasi maske dokuları ────────────────────────────────────────
+    # Küre artık WebGL'de gerçek bir küre: arazi dokusu sfere kaplanıyor,
+    # üstüne bu maske karıştırılıyor. Çokgenleri her karede çizmek yerine
+    # tek doku örneklemesi.
+    SIDE_RGB = {
+        "ittifak": (214, 76, 60),
+        "eksen": (214, 76, 60),
+        "itilaf": (96, 150, 228),
+        "muttefik": (96, 150, 228),
+        "tarafsiz": (168, 154, 100),
+    }
+    for war, polys in wars.items():
+        img = Image.new("RGB", (POL_W, POL_H), (0, 0, 0))
+        dr = ImageDraw.Draw(img)
+        ordered = sorted(polys, key=lambda q: -ring_area(q["ring"]))
+        for poly in ordered:
+            xy = [
+                ((lon + 180.0) / 360.0 * POL_W, (LAT_LIM - lat) / (2 * LAT_LIM) * POL_H)
+                for lon, lat in poly["ring"]
+            ]
+            if len(xy) >= 3:
+                dr.polygon(xy, fill=SIDE_RGB.get(poly["side"], (0, 0, 0)))
+        path = os.path.join(PUBLIC, f"pol-{war}.webp")
+        img.save(path, quality=80, method=5)
+        print(f"siyasi maske {war}: {POL_W}x{POL_H} -> {os.path.getsize(path)//1024} KB")
 
     out = {
         "_source": {

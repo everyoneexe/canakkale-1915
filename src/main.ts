@@ -83,6 +83,11 @@ class Game {
     });
     this.globe.setWar('ww1');
     this.globe.start();
+    // Arazi ve siyasi maske dokuları inene kadar küre boş çizilir; yükleme
+    // bitince kendiliğinden görünür.
+    void this.globe.load().catch((e: unknown) => {
+      console.error('küre dokuları yüklenemedi', e);
+    });
 
     for (const id of ['ustbar', 'panel', 'modlar', 'gunluk']) {
       $(id).addEventListener('pointerenter', () => {

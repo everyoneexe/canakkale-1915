@@ -16,7 +16,11 @@
 ---
 
 Oyun bir **küre** ile açılır: Dünya'yı döndürür, bir cepheye tıklar, tarafını
-seçersin. Bir tur bir gündür. HOI4'ten alınan sistemler — cephe genişliği,
+seçersin. Küre WebGL'de gerçek bir sferdir — SRTM arazisi kaplanmış, güneş
+terminatörü, atmosfer saçılması. Siyasi renk düz boya değil, arazinin
+parlaklığıyla modüle edilir: taraf rengi altında dağlar ve çöller okunur.
+Her iki küre de savaşın BAŞLANGIÇ günündeki ittifakları gösterir — ABD
+1914 küresinde tarafsızdır, İtalya ve Japonya 1939 küresinde tarafsızdır. Bir tur bir gündür. HOI4'ten alınan sistemler — cephe genişliği,
 organizasyon, siperlenme, tahkimat, ikmal ağı, komutan özellikleri, harita
 modları — günlük tur çözümüne uyarlanmıştır.
 
@@ -151,8 +155,11 @@ türetmek hem çalıştı hem de rölyefle %100 tutarlı sonuç verdi.
 * **Rölyef**: gölgelendirme **Python'da** yapılıp WebP olarak paketlenir.
   Tarayıcıda 7,6 milyon pikseli boyamak saniyeler sürüyordu ve PNG 10 MB
   geliyordu; ön gölgelendirilmiş WebP 550 KB.
-* **Küre**: ayrı ve çok daha kaba geometri (107 kıyı halkası, 1.289 köşe,
-  88 KB) — 60 fps döndürme için il halkaları fazla ağır.
+* **Küre**: WebGL2 ile ortografik küre ışın-izi. Ekran dörtgenine bir
+  fragman gölgelendirici çizilir; her piksel için ters ortografik izdüşümle
+  enlem/boylam bulunup arazi ve siyasi maske dokuları örneklenir. Tek çizim
+  çağrısı. Siyasi maskeler savaş başına eşdikdörtgen WebP (60 KB).
+  İğneler üstteki 2D katmanda.
 
 Dünya verisi (2,9 MB) **ayrı bir pakete** bölünür ve yalnız bir dünya cephesi
 seçilince indirilir; Çanakkale oynayan hiç indirmez.
