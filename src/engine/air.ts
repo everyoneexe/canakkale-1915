@@ -1,6 +1,6 @@
 import type { CombatReport, GameState, ProvinceId } from '../core/types.ts';
 import { dist, prov } from '../core/geo.ts';
-import { WEATHERS } from '../data/units.ts';
+import { WEATHERS } from '../data/terrain.ts';
 import type { Rng } from './rng.ts';
 
 /**

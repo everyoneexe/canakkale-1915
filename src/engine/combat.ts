@@ -7,7 +7,9 @@ import type {
   Side,
 } from '../core/types.ts';
 import { prov } from '../core/geo.ts';
-import { BATTALIONS, MAX_ENTRENCHMENT, TEMPLATE_BY_ID, TERRAINS, WEATHERS, aggregate } from '../data/units.ts';
+import { BATTALIONS, aggregate } from '../data/battalions.ts';
+import { TEMPLATE_BY_ID } from '../data/templates.ts';
+import { MAX_ENTRENCHMENT, TERRAINS, WEATHERS } from '../data/terrain.ts';
 import { TRAITS } from '../data/commanders.ts';
 import type { Rng } from './rng.ts';
 

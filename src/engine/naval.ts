@@ -11,7 +11,7 @@ import type {
 import { dist, distToSegment, prov } from '../core/geo.ts';
 import { GUN_BY_ID } from '../data/guns.ts';
 import { SHIP_CLASSES } from '../data/ships.ts';
-import { WEATHERS } from '../data/units.ts';
+import { WEATHERS } from '../data/terrain.ts';
 import { commanderMods } from './combat.ts';
 import type { Rng } from './rng.ts';
 

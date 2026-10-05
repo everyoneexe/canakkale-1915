@@ -1,6 +1,5 @@
 import './style/app.css';
 import type {
-  CombatReport,
   GameState,
   HistoricalEvent,
   LandOrderKind,
@@ -10,8 +9,7 @@ import type {
 } from './core/types.ts';
 import { loadMap, prov, provinces } from './core/geo.ts';
 import type { MapKind } from './core/geo.ts';
-import { WEATHERS } from './data/units.ts';
-import { C } from './style/tokens.ts';
+import { WEATHERS } from './data/terrain.ts';
 import { briefingFor } from './data/briefing.ts';
 import { formatDate, scenario, setActiveScenario } from './engine/scenario.ts';
 import { setupFor } from './engine/theatre-setup.ts';
@@ -19,6 +17,9 @@ import { SIDE_LABEL_WORLD } from './data/world1914.ts';
 import { THEATRES, THEATRE_BY_ID } from './data/theatres.ts';
 import type { Theatre, WarId } from './data/theatres.ts';
 import { Globe } from './ui/globe.ts';
+import { $, esc, num } from './ui/dom.ts';
+import { renderLegend } from './ui/legend.ts';
+import { renderJournal } from './ui/journal.ts';
 import { queueOpeningEvents, endTurn, applyEffect } from './engine/turn.ts';
 import { issueLandOrder, issueNavalOrder } from './engine/orders.ts';
 import { liveShips, minefieldsIn } from './engine/naval.ts';
@@ -26,15 +27,6 @@ import { MAP_MODES, MapView } from './render/map.ts';
 import type { MapMode, Selection } from './render/map.ts';
 import { Panel } from './ui/panel.ts';
 
-const $ = <T extends HTMLElement>(id: string): T => {
-  const el = document.getElementById(id);
-  if (!el) throw new Error(`eksik eleman: #${id}`);
-  return el as T;
-};
-
-const num = (n: number): string => Math.round(n).toLocaleString('tr-TR');
-const esc = (s: string): string =>
-  s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
 /** Bekleyen emir hedefi — kullanıcı haritadan il seçecek. */
 interface PendingOrder {
@@ -265,60 +257,9 @@ class Game {
     this.describeMode();
   }
 
-  /**
-   * Etkin harita modunun ne gösterdiğini yazar.
-   *
-   * Düğmeler yalnız bir ad taşıyordu; "MAYIN" seçildiğinde ekranda beliren
-   * şekillerin anlamı hiçbir yerde yazmıyor, oyuncu yuvarlak lekelere bakıp
-   * ne olduğunu kestirmeye çalışıyordu.
-   */
+  /** Harita modu göstergesi — ayrıntı `ui/legend.ts` içinde. */
   private describeMode(): void {
-    const box = $('mod-aciklama');
-    const key = (c: string, text: string, line = false) =>
-      `<li><i class="${line ? 'cizgi' : ''}" style="background:${c}"></i>${text}</li>`;
-    // Taraf adları ve renkleri PALETTEN ve TİYATRODAN gelir; sabit
-    // yazılırsa tema ya da cephe değişince sessizce yalan söyler.
-    //
-    // Hata: gösterge her cephede "Osmanlı / İtilaf" yazıyordu. Kuzey
-    // Afrika'da üst bar "ALMANYA · İTALYA" derken hemen altındaki harita
-    // göstergesi "Osmanlı denetiminde" diyordu.
-    const hex = (n: number) => `#${n.toString(16).padStart(6, '0')}`;
-    const ott = this.state?.playerSide === 'ottoman';
-    const kisalt = (s: string) => (s.length > 22 ? `${s.slice(0, 21)}…` : s);
-    const own = kisalt(ott ? this.theatre.sides.a : this.theatre.sides.b);
-    const foe = kisalt(ott ? this.theatre.sides.b : this.theatre.sides.a);
-    const ownC = hex(ott ? C.ottomanDim : C.ententeDim);
-    const foeC = hex(ott ? C.ententeDim : C.ottomanDim);
-
-    const text: Record<MapMode, string> = {
-      siyasi:
-        `<b>SİYASİ</b>İlleri denetleyen tarafa göre boyar.<ul>` +
-        key(ownC, `${own} denetiminde`) +
-        key(foeC, `${foe} denetiminde`) +
-        key(hex(C.land), 'Görülmemiş — keşif yok') +
-        `</ul>`,
-      arazi:
-        `<b>ARAZİ</b>Zemin tipi. Savunmaya kattığı değer yükseldikçe renk ` +
-        `koyulaşır: sırtlarda saldırmak pahalıdır.`,
-      tedarik:
-        `<b>İKMAL</b>İllere ulaşan ikmal oranı. Yeşil bol, kırmızı kesik; ` +
-        `ikmalsiz birlik organizasyon kaybeder ve cephane harcayamaz.<ul>` +
-        key('#7fc08a', 'Tam ikmal') +
-        key(hex(C.accent), 'Zorlanıyor') +
-        key(hex(C.mine), 'Kesik') +
-        `</ul>`,
-      deniz:
-        `<b>DENİZ</b>Yalnız deniz illeri. Renk koyuldukça akıntı güçlüdür — ` +
-        `Boğaz akıntısı mayın tarama ve gemi hızını düşürür.`,
-      mayin:
-        `<b>MAYIN</b>Her hat boğazı enlemesine kapatan bir bariyerdir; ` +
-        `çizgi hattın kendisi, noktalar üstünde KALAN mayınlardır. Etiket ` +
-        `hattın adını ve kalan/başlangıç sayısını verir.<ul>` +
-        key(hex(C.mine), `${own} hattı`, true) +
-        key(hex(C.hostile), `${foe} hattı — yalnız tespit edilmişse`, true) +
-        `</ul>`,
-    };
-    box.innerHTML = text[this.view.mode];
+    renderLegend(this.view.mode, this.theatre, this.state?.playerSide ?? null);
   }
 
   private bindChrome(): void {
@@ -610,91 +551,12 @@ class Game {
     $<HTMLButtonElement>('tur-bitir').disabled = s.outcome !== null;
   }
 
-  /**
-   * Günlük.
-   *
-   * Aynı ildeki tabya düellosu her gemi grubu için ayrı rapor üretiyordu:
-   * tek turda üç kez "Boğaz Ağzı — tabya düellosu" satırı çıkıyor, yirmi
-   * tur sonra ekran birbirinin aynı kayıtlarla doluyordu. Aynı gün + aynı
-   * il + aynı başlık tek kayda katlanır, kaç kez olduğu sayıyla verilir.
-   * Asıl olaylar (mayın çarpması, batan gemi) böylece gömülmez.
-   */
+  /** Günlük paneli — ayrıntı `ui/journal.ts` içinde. */
   private renderLog(): void {
-    const list = $('gunluk-liste');
-    if (this.state.reports.length === 0) {
-      list.innerHTML = `<div class="kayit"><div class="kayit-satir">
-        Henüz rapor yok. Emirleri ver ve turu bitir.</div></div>`;
-      return;
-    }
-
-    // Raporlar oyun durumunun parçası; burada KOPYA üzerinde çalışılır.
-    // Satırları yerinde biriktirmek render'ı duruma yazan bir yan etki
-    // yapardı ve kayıtlar her çizimde şişerdi.
-    interface LogEntry {
-      readonly report: CombatReport;
-      readonly lines: string[];
-      count: number;
-    }
-    const merged: LogEntry[] = [];
-    const seen = new Map<string, LogEntry>();
-    for (const r of this.state.reports) {
-      const key = `${r.day}|${r.province}|${r.title}`;
-      const hit = seen.get(key);
-      if (!hit) {
-        const entry: LogEntry = { report: r, lines: [...r.lines], count: 1 };
-        seen.set(key, entry);
-        merged.push(entry);
-        if (merged.length >= 40) break;
-        continue;
-      }
-      hit.count++;
-      // Tekrar eden kaydın ÖZGÜN satırlarını koru: biri "mayına çarptı"
-      // diyorsa o satır kaybolmamalı.
-      for (const l of r.lines) if (!hit.lines.includes(l)) hit.lines.push(l);
-    }
-
-    // Satırları ÖNEME göre sırala. Birleşmiş bir düello kaydında dört adet
-    // "1 tabya menzilde · donanma ateşi 130" satırı, aralarındaki tek
-    // "mayına çarptı" satırını kesme sınırının altına itiyordu.
-    // 'temizlenemedi' BİLEREK dışarıda: tarama raporunda öğretici olan şey
-    // sonuç değil, nedensellik zinciri (kapasite → akıntı → tabya ateşi →
-    // sonuç). Onu öne çekmek zinciri tersine çeviriyordu.
-    // Zırh satırları da anahtar: "neden hiçbir şey olmadı" sorusunun
-    // cevabı onlarda. Dördüncü satırın altında kalırlarsa oyuncu panzerin
-    // neden durdurulamadığını hiç öğrenemiyor.
-    const KEY =
-      /mayına çarp|batt|hasarl|savaş dışı|çekil|ele geçir|şehit|delemiyor|zırhlı —/i;
-    for (const e of merged) {
-      e.lines.sort((a, b) => Number(KEY.test(b)) - Number(KEY.test(a)));
-    }
-
-    list.innerHTML = merged
-      .map(
-        ({ report: r, lines, count }) =>
-          `<div class="kayit ${r.kind}" data-il="${r.province}">
-        <div class="kayit-bas"><span>${esc(r.title)}${count > 1 ? ` ×${count}` : ''}</span>
-          <span class="kayit-gun">g${r.day}</span></div>
-        ${lines
-          .slice(0, 4)
-          .map((l) => `<div class="kayit-satir">${esc(l)}</div>`)
-          .join('')}
-        ${
-          lines.length > 4
-            ? `<div class="kayit-satir soluk">+${lines.length - 4} satır daha</div>`
-            : ''
-        }
-      </div>`,
-      )
-      .join('');
-    for (const el of list.querySelectorAll<HTMLElement>('.kayit')) {
-      el.addEventListener('click', () => {
-        const id = el.dataset.il;
-        if (id) {
-          this.view.centreOn(id);
-          this.select({ kind: 'il', id });
-        }
-      });
-    }
+    renderJournal(this.state.reports, (id) => {
+      this.view.centreOn(id);
+      this.select({ kind: 'il', id });
+    });
   }
 
   private showNextEvent(): void {
