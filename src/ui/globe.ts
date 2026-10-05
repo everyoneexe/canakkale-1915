@@ -216,6 +216,8 @@ export class Globe {
   private lon0 = 14;
   private lat0 = 32;
   private radius = 240;
+  /** Tüm kürenin kadraja oturduğu yarıçap — zoom sınırlarının dayanağı. */
+  private fitRadius = 0;
   private cx = 0;
   private cy = 0;
 
@@ -387,7 +389,28 @@ export class Globe {
     this.octx.setTransform(dpr, 0, 0, dpr, 0, 0);
     this.cx = rect.width / 2;
     this.cy = rect.height / 2;
-    this.radius = Math.min(rect.width, rect.height) * 0.42;
+    // Tüm kürenin kadraja oturduğu yarıçap; zoom sınırları buna göre.
+    const fit = Math.min(rect.width, rect.height) * 0.42;
+    // Mevcut zoom oranını koru, yoksa pencere boyu değişince küre sıçrıyor.
+    const k = this.fitRadius > 0 ? this.radius / this.fitRadius : 1;
+    this.fitRadius = fit;
+    this.radius = this.clampRadius(fit * k);
+  }
+
+  /**
+   * Zoom sınırları.
+   *
+   * ALT sınır sabit 110 px'ti: küre ekranın ortasında minik bir topa
+   * düşebiliyordu — ne okunur ne de bir işe yarar. Artık tüm kürenin
+   * kadraja oturduğu yarıçapın altına inilemez.
+   *
+   * ÜST sınır veriye bağlı: merkezde 400 px/derece ≈ 280 m/ekran pikseli.
+   * Akan mozaik daha incesini de verebilir ama küre bir CEPHE SEÇİCİ;
+   * bundan ötesinde küre bir düzleme dönüşüyor ve seçim bağlamı kayboluyor.
+   */
+  private clampRadius(r: number): number {
+    const hi = (400 * 180) / Math.PI;
+    return Math.max(this.fitRadius, Math.min(hi, r));
   }
 
   // ───────────────────────────────────────────────────── izdüşüm ────
@@ -629,8 +652,14 @@ export class Globe {
         const dx = e.offsetX - this.last.x;
         const dy = e.offsetY - this.last.y;
         this.moved += Math.abs(dx) + Math.abs(dy);
-        this.lon0 -= dx * 0.3;
-        this.lat0 = Math.max(-80, Math.min(80, this.lat0 + dy * 0.3));
+        // Derece/piksel SABİT 0,3 idi: yakınlaştırınca tek piksellik hareket
+        // küreyi savuruyordu. Ortografik kürede merkezde bir ekran pikseli
+        // 180/(π·R) dereceye denk gelir; bu değer kullanılınca imlecin
+        // altındaki nokta imlecin altında kalır ve kaydırma zoom'la kendi
+        // kendine ağırlaşır.
+        const perPx = 180 / (Math.PI * this.radius);
+        this.lon0 -= dx * perPx;
+        this.lat0 = Math.max(-80, Math.min(80, this.lat0 + dy * perPx));
         this.last = { x: e.offsetX, y: e.offsetY };
         return;
       }
@@ -646,12 +675,7 @@ export class Globe {
       'wheel',
       (e) => {
         e.preventDefault();
-        const rect = this.cv.getBoundingClientRect();
-        // Eski tavan min(w,h)×1,6 idi: merkezde yalnız ~26 px/derece, yani
-        // zemin dokusunun iki katı. Yakınlaştırmanın anlamı yoktu. Canlı
-        // mozaik geldiğinden tavan açıldı; ~330 px/derece (~340 m/piksel).
-        const max = Math.min(rect.width, rect.height) * 20;
-        this.radius = Math.max(110, Math.min(max, this.radius * Math.exp(-e.deltaY * 0.0012)));
+        this.radius = this.clampRadius(this.radius * Math.exp(-e.deltaY * 0.0012));
       },
       { passive: false },
     );
