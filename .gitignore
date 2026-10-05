@@ -28,10 +28,15 @@ tools/data/coastline.json
 __pycache__/
 *.pyc
 
+# Natural Earth il katmanı 38,8 MB ve kamu malı; depoyu üç katına
+# çıkarmasının anlamı yok. tools/world/fetch_natural_earth.py birebir
+# aynı dosyayı indiriyor (bayt bayt doğrulandı).
+tools/world/ne_10m_admin_1_states_provinces.geojson
+
 # Üretilmiş harita çıktıları (src/data/map*.json, public/relief*.png) depoda
 # TUTULUR: derleme zinciri yüzlerce MB indirme gerektiriyor, oysa çıktı
-# birkaç yüz KB. Doğal Earth geojson'ları da kalır — onları indiren betik
-# yok, elle indirilmiş kaynak girdi.
+# birkaç yüz KB. Tarihsel sınır geojson'ları (world_1914/1938, 1,2-1,6 MB)
+# da kalır — aourednik/historical-basemaps'ten elle türetilmiş girdi.
 
 *.log
 .DS_Store
