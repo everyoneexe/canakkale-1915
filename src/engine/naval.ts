@@ -164,9 +164,15 @@ export function resolveNavalFire(state: GameState, rng: Rng): CombatReport[] {
   const covering: Record<string, Fort[]> = {};
   for (const f of engaged) {
     incoming[f.id] = 0;
-    covering[f.id] = fortsCovering(state, f.location).filter(
-      (x) => sideOfFort(state, x) !== f.side,
-    );
+    // Boğazı zorlayan filo yol boyunca HER ilin tabyalarının önünden geçer.
+    // Yalnız varış iline bakmak zorlamayı bedava yapıyordu.
+    const seen = new Set<Fort>();
+    for (const where of [f.location, ...f.transited]) {
+      for (const x of fortsCovering(state, where)) {
+        if (sideOfFort(state, x) !== f.side) seen.add(x);
+      }
+    }
+    covering[f.id] = [...seen];
   }
 
   // ── Tabyalar ateş eder, menzildeki filolara paylaştırarak ──────────
@@ -181,7 +187,11 @@ export function resolveNavalFire(state: GameState, rng: Rng): CombatReport[] {
 
     // Yaklaşan filoya daha çok ateş ayrılır; uzaktakine daha az.
     const weights = targets.map((f) => {
-      const range = dist(fort.pos, prov(f.location).center);
+      // Geçilen illerin EN YAKINI esas alınır: tabyanın dibinden geçen filo
+      // varış yeri uzakta diye az ateş yemez.
+      const range = Math.min(
+        ...[f.location, ...f.transited].map((w) => dist(fort.pos, prov(w).center)),
+      );
       const rangeFactor = Math.max(0.2, 1 - range / Math.max(1, fortRange(fort)));
       return rangeFactor * (pressingFleet(f) ? 1.6 : 1);
     });
@@ -283,7 +293,7 @@ function pressingFleet(f: Fleet): boolean {
   return f.order?.kind === 'bombardiman' || f.order?.kind === 'zorla_gec';
 }
 
-function sideOfFort(state: GameState, f: Fort): Side {
+export function sideOfFort(state: GameState, f: Fort): Side {
   return state.provinces[f.province]?.controller ?? 'ottoman';
 }
 

@@ -23,6 +23,9 @@ import {
   liveShips,
   navalSupportFor,
   resolveMines,
+  fortsCovering,
+  minefieldsIn,
+  sideOfFort,
   resolveNavalFire,
   resolveSweeping,
 } from './naval.ts';
@@ -149,6 +152,7 @@ function resolveNavalPhase(state: GameState, rng: Rng): CombatReport[] {
   for (const f of Object.values(state.fleets)) {
     if (liveShips(f).length === 0) continue;
     f.inCombat = false;
+    f.transited = [];
     const order = f.order;
     if (!order) continue;
 
@@ -176,6 +180,25 @@ function resolveNavalPhase(state: GameState, rng: Rng): CombatReport[] {
         budget -= step;
         f.location = next;
         path.shift();
+        // Zorlama manevrasında geçilen her il tabya ateşine maruz kalır.
+        if (order.kind === 'zorla_gec') {
+          f.transited.push(next);
+          // BOĞAZ BİR GÜNDE GEÇİLMEZ. Savunulan bir ile — canlı düşman
+          // tabyası ateş menzilinde ya da mayın hattı duruyor — girildiğinde
+          // filo orada durur ve o gün orayı dövüşerek geçmeye çalışır.
+          //
+          // Bu kural olmadan günlük tur soyutlaması ışınlanmaya izin
+          // veriyordu: filo Boğaz Ağzı'ndan Marmara'ya tek turda çıkıyor,
+          // yol boyunca her tabyanın günlük ateşinden yalnızca birer pay
+          // alıp %10 hasarla boğazı geçiyordu. Tarihte donanma yedi saat
+          // dövüşüp Dar Boğaz'ı hiç geçemedi.
+          const defended =
+            minefieldsIn(state, next).some((m) => m.mines > 0) ||
+            fortsCovering(state, next).some(
+              (x) => x.integrity > 0.05 && x.ammo > 0 && sideOfFort(state, x) !== f.side,
+            );
+          if (defended) break;
+        }
 
         // Her yeni ile girişte mayın riski.
         const mine = resolveMines(state, f, rng);

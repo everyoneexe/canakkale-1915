@@ -335,6 +335,36 @@ katlanır, önemli satırlar (mayına çarpma, batan gemi) öne alınır. Önced
 tek turda üç kez aynı düello satırı çıkıyor, yirmi tur sonra asıl olaylar
 gömülüyordu.
 
+## Yapay zekâ
+
+Karşı taraf bir "niyet makinesi": İtilaf önce boğazı donanmayla zorlar,
+ilerleyemez ve ağır kayıp verirse kara harekâtına geçer.
+
+Üç kusur vardı, üçü de oynarken ortaya çıktı.
+
+* **18 Mart manevrası hiç yapılmıyordu.** `zorla_gec` emri motorda eksiksiz
+  işleniyordu — ateş gücü ×1,45, mühimmat ×2, alınan hasar ×2,5 — ama YZ bu
+  emri HİÇ vermiyordu. Kampanyanın en ünlü günü oyunda gerçekleşemiyor,
+  donanma aylarca aynı iki emri tekrarlıyordu. Artık 18 Mart'tan sonra,
+  filo sağlığı %70'in üzerindeyse ve boğazda hâlâ mayın varsa büyük zorlama
+  denemesi yapılır; başarısızsa 12 gün sonra tekrarlanır. Bütün ağır filolar
+  aynı gün girer — damla damla zorlama tarihsel yoğunluğu kaybettiriyordu.
+* **Boğaz bir günde geçilebiliyordu.** Mayın riski her ile girişte
+  çözülüyordu ama tabya ateşi yalnız VARIŞ ilinde hesaplanıyordu. Zorlayan
+  filo yol boyunca bütün tabyaların önünden bedavaya geçip tek turda
+  Marmara'ya çıkabiliyordu — toplam %10 hasarla. İki düzeltme: geçilen her
+  il tabya ateşine dahil edilir (`Fleet.transited`) ve savunulan bir ile —
+  canlı tabya menzilde ya da mayın hattı duruyor — girildiğinde filo orada
+  durur. Tarihte donanma yedi saat dövüşüp Dar Boğaz'ı geçemedi.
+* **YZ belleği kampanya ömrünü aşıyordu.** Onarım listesi, seçilmiş çıkarma
+  sahili ve son deneme günü modül düzeyinde `let`/`Set` olarak duruyordu;
+  ikinci kampanya birincininkini devralıyordu. Determinizm testi bunu
+  yakaladı. Bellek artık `GameState.ai` içinde.
+
+Fabrika `freshAiMemory()` bilerek `core/types.ts` içinde: `ai.ts` içindeyken
+`scenario.ts → ai.ts → scenario.ts` döngüsü oluşuyor ve `ai.ts`'in modül
+başındaki `dayOf()` çağrısı `START_DATE` henüz TDZ'deyken patlıyordu.
+
 ## Mimari
 
 ```

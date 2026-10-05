@@ -14,7 +14,7 @@ import type {
   UnitId,
   VictoryRules,
 } from '../core/types.ts';
-import { SIDE_OF_NATION } from '../core/types.ts';
+import { SIDE_OF_NATION, freshAiMemory } from '../core/types.ts';
 import { gameMap, makeProjection, prov, provinceAt, provinces } from '../core/geo.ts';
 import { FORT_AMMO_PER_HEAVY_GUN, FORT_AMMO_PER_LIGHT_GUN, FORTS, HEAVY_CALIBRE } from '../data/forts.ts';
 import { GUN_BY_ID } from '../data/guns.ts';
@@ -210,6 +210,7 @@ function buildFleets(): Record<UnitId, Fleet> {
       moveProgress: 0,
       embarked: [],
       inCombat: false,
+      transited: [],
     };
   }
   return out;
@@ -395,6 +396,7 @@ export function newGame(playerSide: Side = 'ottoman', seed = 19150318): GameStat
     reports: [],
     firedEvents: [],
     pendingEvents: [],
+    ai: freshAiMemory(),
     rngState: seed,
     outcome: null,
   };

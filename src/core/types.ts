@@ -301,6 +301,16 @@ export interface Fleet {
   /** Bu filonun taşıdığı kara birlikleri. */
   embarked: UnitId[];
   inCombat: boolean;
+  /**
+   * Bu tur İÇİNDEN GEÇİLEN deniz illeri (`zorla_gec`).
+   *
+   * Mayın riski her ile girişte çözülüyordu ama tabya ateşi yalnız VARIŞ
+   * ilinde hesaplanıyordu: boğazı zorlayan filo yol boyunca bütün tabyaların
+   * önünden bedavaya geçip tek turda Marmara'ya çıkabiliyordu. Oysa emrin
+   * kendi açıklaması "her ilde hem mayın hem tabya düellosu" diyor.
+   * Tur başında temizlenir.
+   */
+  transited: ProvinceId[];
 }
 
 export type NavalOrderKind =
@@ -537,6 +547,28 @@ export interface WeatherProfile {
 
 export type Phase = 'emir' | 'cozum' | 'bitti';
 
+/** Karşı taraf YZ'sinin turlar arası belleği. */
+export interface AiMemory {
+  /** Üsse çekilip onarılan filolar. Histerezis eşiği için gerekli. */
+  repairing: string[];
+  /** Seçilmiş çıkarma sahili; alınana kadar korunur. */
+  committedBeach: ProvinceId | null;
+  /** Son büyük zorlama denemesinin günü. */
+  lastGrandAttempt: DayIndex;
+}
+
+/**
+ * Yeni kampanyanın boş YZ belleği.
+ *
+ * `types.ts` hiçbir motor modülünü import etmez; fabrika burada durur.
+ * `ai.ts` içinde dururken `scenario.ts → ai.ts → scenario.ts` döngüsü
+ * oluşuyor ve `ai.ts`'in modül başındaki `dayOf()` çağrısı `START_DATE`
+ * henüz TDZ'deyken çalışıp patlıyordu.
+ */
+export function freshAiMemory(): AiMemory {
+  return { repairing: [], committedBeach: null, lastGrandAttempt: -999 };
+}
+
 export interface GameState {
   day: DayIndex;
   /** ISO tarih — senaryo başlangıcı + day. */
@@ -561,6 +593,15 @@ export interface GameState {
   pendingEvents: HistoricalEvent[];
   /** Deterministik RNG durumu. */
   rngState: number;
+  /**
+   * Karşı taraf YZ'sinin turlar arası belleği.
+   *
+   * Bu alanlar `engine/ai.ts` içinde modül düzeyinde duruyordu ve kampanya
+   * ömrünü aşıyordu: ikinci kampanya birincinin onarım listesini
+   * devralıyor, aynı tohum farklı sonuç veriyordu. Determinizm testi bunu
+   * yakaladı. YZ belleği oyun durumunun parçasıdır.
+   */
+  ai: AiMemory;
   outcome: Outcome | null;
 }
 
