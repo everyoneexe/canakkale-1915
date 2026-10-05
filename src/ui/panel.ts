@@ -9,6 +9,8 @@ import type {
 import { prov } from '../core/geo.ts';
 import { GUN_BY_ID } from '../data/guns.ts';
 import { TERRAINS } from '../data/units.ts';
+import { MINEFIELD_BY_ID } from '../data/minefields.ts';
+import { formatDate } from '../engine/scenario.ts';
 import { commanderMods, templateStats } from '../engine/combat.ts';
 import {
   CRIPPLED_HULL,
@@ -185,9 +187,28 @@ export class Panel {
     }
 
     if (mines.length > 0) {
+      // Her hattın dökülme tarihi, döken gemi, derinliği ve notu
+      // `data/minefields.ts` içinde duruyordu ama oyuncuya hiç ulaşmıyordu:
+      // kampanyanın en önemli nesnesi olan Nusret hattı ekranda yalnız
+      // "11. Hat — Nusret 26/26" olarak görünüyordu.
       html += `<div class="bolum"><h4>MAYIN HATLARI</h4>`;
+      let approx = false;
       for (const m of mines) {
-        html += row(m.name, `${m.mines}/${m.initialMines} mayın`);
+        const spec = MINEFIELD_BY_ID[m.id];
+        if (spec?.countApprox) approx = true;
+        html += row(
+          m.name,
+          `${m.mines}/${m.initialMines} mayın${spec?.countApprox ? ' ≈' : ''}`,
+        );
+        const bits = [`${m.depth} m derinlik`];
+        if (spec) bits.unshift(esc(spec.layer), esc(formatDate(spec.laidOn)));
+        html += `<p class="not alt">${bits.join(' · ')}</p>`;
+        if (spec?.note) html += `<p class="not alt">${esc(spec.note)}</p>`;
+      }
+      if (approx) {
+        html += `<p class="not">≈ hat başına mayın sayısı kaynaklarda hat hat
+          verilmiyor; toplam 403 mayını tutturacak biçimde dağıtıldı. Kesin
+          olan 11. Hat'tır: Nusret, 26 mayın.</p>`;
       }
       html += `</div>`;
     }

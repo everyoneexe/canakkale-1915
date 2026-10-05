@@ -1268,3 +1268,19 @@ body {
   height: 3px;
   border: 0;
 }
+
+/* Mayın hattı künyesi — döken gemi, tarih, derinlik, not. */
+.not.alt {
+  margin: 1px 0 7px;
+  padding-left: 9px;
+  border-left: 1px solid var(--edge);
+  font-size: 9.5px;
+  line-height: 1.5;
+  color: var(--text-faint);
+}
+
+/* Günlükte kesilen satır sayacı. */
+.kayit-satir.soluk {
+  color: var(--text-faint);
+  font-style: italic;
+}
