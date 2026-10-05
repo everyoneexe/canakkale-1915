@@ -1439,11 +1439,30 @@ body {
   }
 }
 
-/* Dokunmatik: hover diye bir şey yok. Fare ipucu kutusu parmakla asla
-   kapanmıyor ve haritanın yarısını örtüyordu. */
-@media (hover: none) {
-  .ipucu {
+/* Dokunmatik: fare ipucu kutusu parmakla asla kapanmıyor ve haritanın
+   yarısını örtüyordu.
+
+   Ölçüt `(pointer: coarse)`, `(hover: none)` DEĞİL. İkincisi olumsuz bir
+   yetenek sorgusu: işaretleyicisi bilinmeyen ortamlar (headless tarayıcı,
+   bazı uzak masaüstü oturumları) da `hover: none` diyor ve fare ipucu
+   masaüstünde sessizce kayboluyordu. `pointer: coarse` ise parmağın
+   kendisini sorar; dokunmatik ekranlı dizüstünde fare varsa `fine`
+   kalır ve ipucu çalışmaya devam eder. */
+@media (pointer: coarse) {
+  /* BİLDİRİM aynı kutuyu kullanıyor (`toast()`): gizlenirse oyuncu
+     "Yürü" deyip emrin reddedildiğini göremiyor ve hiçbir şey olmadığını
+     sanıyor. Yalnız fare ipucu gizlenir. */
+  .ipucu:not(.bildirim) {
     display: none;
+  }
+  /* Bildirim parmak için ortada ve okunur dursun. */
+  .ipucu.bildirim {
+    left: 50% !important;
+    transform: translateX(-50%);
+    max-width: calc(100vw - 32px);
+    text-align: center;
+    font-size: 12px;
+    padding: 10px 14px;
   }
   /* Dokunma hedefi en az 44px. */
   .mod,
@@ -1455,20 +1474,26 @@ body {
   .emir {
     min-height: 44px;
   }
-  /* Tarayıcının kendi çift-dokunuş yakınlaştırması devrede olmasın:
-     harita ve küre kendi pinch mantığını çalıştırıyor. */
-  #harita,
-  #kure,
-  .kure-overlay {
-    touch-action: none;
-  }
+}
+
+/* Tarayıcının kendi kaydırma ve çift-dokunuş yakınlaştırması devrede
+   olmasın: harita ve küre kendi pinch mantığını çalıştırıyor.
+
+   KOŞULSUZ. Medya sorgusunun içindeyken pinch, sorgunun eşleşmesine
+   bağlı kalıyordu; `pointer: coarse` bildirmeyen bir dokunmatik cihazda
+   yakınlaştırma sessizce tarayıcıya geçerdi. `touch-action` farenin
+   davranışını zaten etkilemiyor. */
+#harita,
+#kure,
+.kure-overlay {
+  touch-action: none;
 }
 
 /* Cihaza göre ipucu. Telefonda "Tekerlek: yakınlaştır" yazıyordu. */
 .ipucu-dokunma {
   display: none;
 }
-@media (hover: none) {
+@media (pointer: coarse) {
   .ipucu-fare {
     display: none;
   }

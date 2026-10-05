@@ -192,7 +192,11 @@ export function issueLandOrder(
         !prov(id).isSea &&
         (state.provinces[id]?.controller === u.side || state.provinces[id]?.controller == null),
     );
-    if (!path) return 'Dost topraklardan hedefe yol yok.';
+    // Mesaj NE YAPILACAĞINI söylemeli: oyuncu düşman iline yürümeye
+    // çalışıp "yol yok" görünce emrin bozuk olduğunu sanıyordu.
+    if (!path) {
+      return 'Hedefe dost topraktan yol yok. Düşman iline girmek için Taarruz kullan.';
+    }
     u.order = { kind, target, path };
     return null;
   }
