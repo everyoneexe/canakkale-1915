@@ -9,7 +9,7 @@ import type {
   Weather,
   HistoricalEvent,
 } from '../core/types.ts';
-import { prov, provinceDist, provinces } from '../core/geo.ts';
+import { mapKind, prov, provinceDist, provinces } from '../core/geo.ts';
 import { TERRAINS, WEATHERS } from '../data/units.ts';
 import {
   commanderMods,
@@ -53,8 +53,20 @@ import { Rng } from './rng.ts';
  * Deterministiktir: aynı durum + aynı emirler = aynı sonuç.
  */
 
-/** Kara birliğinin bir günde alabileceği temel yol (metre). */
-const LAND_SPEED_M = 9000;
+/**
+ * Kara birliğinin bir günde alabileceği temel yol (metre) — HARİTA
+ * ÖLÇEĞİNE BAĞLI, tıpkı ikmal yıpranması gibi.
+ *
+ * Çanakkale'de 9 km/gün doğru: 47 ilin arası 1-3 km, hareket zaten
+ * muharebeyle kesiliyor. Dünya haritasında komşu illerin arası MEDYAN
+ * 65 km; aynı 9 km ile tipik bir adım yedi günden önce bitmiyordu ve
+ * (aşağıdaki `moveProgress` hatasıyla birlikte) kara birlikleri dünya
+ * haritasında hiç yürüyemiyordu. 1915 piyadesi yolda günde 20-25 km
+ * yürür; dünya için 22 km/gün alındı.
+ */
+function landSpeedM(): number {
+  return mapKind() === 'dunya' ? 22000 : 9000;
+}
 /**
  * Filonun bir günde alabileceği temel yol (metre).
  * 15 knot × 24 saat = 660 km; manevra, gece duruşu ve tedbirli seyirle
@@ -268,8 +280,10 @@ function moveLandUnits(state: GameState): void {
     if (order.kind !== 'yuru' || order.path.length === 0) continue;
 
     const mods = commanderMods(state, u.commanderId);
-    let budget = LAND_SPEED_M * (1 + mods.speed) * WEATHERS[state.weather].movement;
+    let budget = landSpeedM() * (1 + mods.speed) * WEATHERS[state.weather].movement;
     const path = [...order.path];
+    // Hedef değiştiyse yarım kalan yürüyüş sayılmaz.
+    if (u.marchingTo && u.marchingTo !== path[0]) u.moveProgress = 0;
     while (path.length > 0 && budget > 0) {
       const next = path[0]!;
       const p = prov(next);
@@ -279,19 +293,31 @@ function moveLandUnits(state: GameState): void {
       if (st.controller && st.controller !== u.side) break;
       const step = provinceDist(u.location, next) * TERRAINS[p.terrain].moveCost;
       if (step > budget) {
-        u.moveProgress = Math.min(0.95, u.moveProgress + budget / step);
-        budget = 0;
-        break;
+        // Hata: ilerleme birikiyor ama HİÇ KULLANILMIYORDU, üstelik 0.95'te
+        // tavanlanıyordu. Bir günlük yolu aşan her adım sonsuza kadar
+        // tamamlanamıyordu — dünya haritasında (komşular medyan 65 km)
+        // kara birlikleri hiç yürüyemiyor, yalnız bitişik ile taarruz
+        // edebiliyordu. Panzer grupları Barbarossa boyunca mevzide kaldı.
+        u.moveProgress += budget / step;
+        if (u.moveProgress < 1) {
+          u.marchingTo = next;
+          budget = 0;
+          break;
+        }
+        // Yol tamamlandı: kalan bütçe yok, birlik ile varır.
+      } else {
+        budget -= step;
       }
-      budget -= step;
       u.location = next;
       u.moveProgress = 0;
+      u.marchingTo = null;
       u.entrenchment = 0;
       path.shift();
       if (!st.controller) {
         st.controller = u.side;
         st.owner ??= u.side;
       }
+      if (budget <= 0) break;
     }
     u.order = path.length > 0 ? { ...order, path } : { kind: 'bekle', target: null, path: [] };
   }

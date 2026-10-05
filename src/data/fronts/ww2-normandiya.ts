@@ -24,9 +24,9 @@ export const NORMANDIYA_PACK: FrontPack = {
     { nation: DE, name: 'B Ordular Grubu — Rommel', templateId: 'de_ww2_piyade', at: [1.08, 49.44], src: NO },
     { nation: DE, name: '7. Ordu — Normandiya', templateId: 'de_ww2_piyade', at: [-0.70, 49.10], src: NO },
     { nation: DE, name: '15. Ordu — Pas-de-Calais', templateId: 'de_ww2_piyade', at: [1.85, 50.95], src: NO },
-    { nation: DE, name: '21. Panzer Tümeni', templateId: 'de_panzer', at: [-0.37, 49.18], src: NO },
-    { nation: DE, name: '12. SS Panzer Tümeni', templateId: 'de_panzer', at: [-0.10, 49.30], arrivesOn: '1944-06-07', src: NO },
-    { nation: DE, name: 'Panzer Lehr Tümeni', templateId: 'de_panzer', at: [-0.60, 49.05], arrivesOn: '1944-06-08', src: NO },
+    { nation: DE, name: '21. Panzer Tümeni', templateId: 'de_panzer_43', at: [-0.37, 49.18], src: NO },
+    { nation: DE, name: '12. SS Panzer Tümeni', templateId: 'de_panzer_43', at: [-0.10, 49.30], arrivesOn: '1944-06-07', src: NO },
+    { nation: DE, name: 'Panzer Lehr Tümeni', templateId: 'de_panzer_43', at: [-0.60, 49.05], arrivesOn: '1944-06-08', src: NO },
     { nation: DE, name: '352. Piyade Tümeni — Omaha', templateId: 'de_ww2_piyade', at: [-0.90, 49.37], src: NO },
 
     // ── Müttefik çıkarma kuvveti ──

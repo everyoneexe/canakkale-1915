@@ -654,7 +654,11 @@ class Game {
     // 'temizlenemedi' BİLEREK dışarıda: tarama raporunda öğretici olan şey
     // sonuç değil, nedensellik zinciri (kapasite → akıntı → tabya ateşi →
     // sonuç). Onu öne çekmek zinciri tersine çeviriyordu.
-    const KEY = /mayına çarp|batt|hasarl|savaş dışı|çekil|ele geçir|şehit/i;
+    // Zırh satırları da anahtar: "neden hiçbir şey olmadı" sorusunun
+    // cevabı onlarda. Dördüncü satırın altında kalırlarsa oyuncu panzerin
+    // neden durdurulamadığını hiç öğrenemiyor.
+    const KEY =
+      /mayına çarp|batt|hasarl|savaş dışı|çekil|ele geçir|şehit|delemiyor|zırhlı —/i;
     for (const e of merged) {
       e.lines.sort((a, b) => Number(KEY.test(b)) - Number(KEY.test(a)));
     }

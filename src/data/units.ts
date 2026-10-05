@@ -25,6 +25,10 @@ export const BATTALIONS: Readonly<Record<BattalionKind, BattalionProfile>> = {
     softAttack: 6,
     breakthrough: 2,
     defence: 14,
+    hardAttack: 0.5,
+    armour: 0,
+    piercing: 0.5,
+    hardness: 0,
     organisation: 60,
     hp: 25,
     supplyUse: 0.6,
@@ -38,6 +42,10 @@ export const BATTALIONS: Readonly<Record<BattalionKind, BattalionProfile>> = {
     softAttack: 9,
     breakthrough: 4,
     defence: 12,
+    hardAttack: 0.5,
+    armour: 0,
+    piercing: 0.5,
+    hardness: 0,
     organisation: 70,
     hp: 22,
     supplyUse: 0.7,
@@ -51,6 +59,10 @@ export const BATTALIONS: Readonly<Record<BattalionKind, BattalionProfile>> = {
     softAttack: 7,
     breakthrough: 3,
     defence: 11,
+    hardAttack: 0.5,
+    armour: 0,
+    piercing: 0.5,
+    hardness: 0,
     organisation: 55,
     hp: 22,
     supplyUse: 0.7,
@@ -64,6 +76,10 @@ export const BATTALIONS: Readonly<Record<BattalionKind, BattalionProfile>> = {
     softAttack: 4,
     breakthrough: 3,
     defence: 6,
+    hardAttack: 0,
+    armour: 0,
+    piercing: 0,
+    hardness: 0,
     organisation: 80,
     hp: 12,
     supplyUse: 0.5,
@@ -77,6 +93,10 @@ export const BATTALIONS: Readonly<Record<BattalionKind, BattalionProfile>> = {
     softAttack: 12,
     breakthrough: 1,
     defence: 26,
+    hardAttack: 0,
+    armour: 0,
+    piercing: 0,
+    hardness: 0,
     organisation: 30,
     hp: 6,
     supplyUse: 0.4,
@@ -90,6 +110,10 @@ export const BATTALIONS: Readonly<Record<BattalionKind, BattalionProfile>> = {
     softAttack: 2,
     breakthrough: 6,
     defence: 8,
+    hardAttack: 1,
+    armour: 0,
+    piercing: 1,
+    hardness: 0,
     organisation: 40,
     hp: 8,
     supplyUse: 0.3,
@@ -103,6 +127,10 @@ export const BATTALIONS: Readonly<Record<BattalionKind, BattalionProfile>> = {
     softAttack: 22,
     breakthrough: 8,
     defence: 5,
+    hardAttack: 4,
+    armour: 0,
+    piercing: 6,
+    hardness: 0,
     organisation: 20,
     hp: 7,
     supplyUse: 1.4,
@@ -116,25 +144,156 @@ export const BATTALIONS: Readonly<Record<BattalionKind, BattalionProfile>> = {
     softAttack: 34,
     breakthrough: 18,
     defence: 4,
+    hardAttack: 8,
+    armour: 0,
+    piercing: 10,
+    hardness: 0,
     organisation: 15,
     hp: 7,
     supplyUse: 2.6,
     guns: 4,
   },
+
+  // ── Zırhlı ve motorlu ──────────────────────────────────────────────
+  // Zırh/delme ölçeği: zırhlı otomobil 3 (tüfek mermisi geçmez, top geçer),
+  // 1940 hafif tank 10, 1941-43 orta tank 25, 1944 ağır tank 45. Dönemin
+  // sahra topçusu (piercing 6) hafif tankı zor deler, ağır tanka hiç
+  // işlemez; tanksavar (40) orta tankı deler, ağır tankta yetersiz kalır.
+  zirhli_oto: {
+    // Çanakkale'de de vardı: Royal Naval Armoured Car Division, 1915.
+    id: 'zirhli_oto',
+    name: 'Zırhlı Otomobil Bölüğü',
+    men: 120,
+    width: 1,
+    softAttack: 10,
+    breakthrough: 14,
+    defence: 6,
+    hardAttack: 3,
+    armour: 3,
+    piercing: 4,
+    hardness: 0.6,
+    organisation: 50,
+    hp: 8,
+    supplyUse: 1.0,
+    guns: 0,
+  },
+  motorlu: {
+    // Zırhı yok; kamyonla taşınır, sert hedef sayılmaz ama hızlıdır.
+    id: 'motorlu',
+    name: 'Motorlu Piyade Taburu',
+    men: 700,
+    width: 2,
+    softAttack: 9,
+    breakthrough: 6,
+    defence: 13,
+    hardAttack: 2,
+    armour: 0,
+    piercing: 3,
+    hardness: 0.15,
+    organisation: 65,
+    hp: 24,
+    supplyUse: 1.6,
+    guns: 0,
+  },
+  tank_hafif: {
+    id: 'tank_hafif',
+    name: 'Hafif Tank Taburu',
+    men: 500,
+    width: 2,
+    softAttack: 14,
+    breakthrough: 30,
+    defence: 9,
+    hardAttack: 8,
+    armour: 10,
+    piercing: 12,
+    hardness: 0.85,
+    organisation: 40,
+    hp: 18,
+    supplyUse: 2.2,
+    guns: 0,
+  },
+  tank_orta: {
+    id: 'tank_orta',
+    name: 'Orta Tank Taburu',
+    men: 600,
+    width: 2,
+    softAttack: 20,
+    breakthrough: 48,
+    defence: 13,
+    hardAttack: 22,
+    armour: 25,
+    piercing: 30,
+    hardness: 0.9,
+    organisation: 38,
+    hp: 22,
+    supplyUse: 3.2,
+    guns: 0,
+  },
+  tank_agir: {
+    id: 'tank_agir',
+    name: 'Ağır Tank Taburu',
+    men: 650,
+    width: 3,
+    softAttack: 24,
+    breakthrough: 70,
+    defence: 18,
+    hardAttack: 38,
+    armour: 45,
+    piercing: 48,
+    hardness: 0.95,
+    organisation: 32,
+    hp: 28,
+    supplyUse: 4.8,
+    guns: 0,
+  },
+  tanksavar: {
+    // Zırhı yok, görevi tek: gelen tankı durdurmak.
+    id: 'tanksavar',
+    name: 'Tanksavar Bataryası',
+    men: 180,
+    width: 1,
+    softAttack: 4,
+    breakthrough: 3,
+    defence: 12,
+    hardAttack: 30,
+    armour: 0,
+    piercing: 40,
+    hardness: 0,
+    organisation: 25,
+    hp: 7,
+    supplyUse: 1.1,
+    guns: 2,
+  },
 };
 
-/** Tabur sayılarından tümen istatistiği topla. */
+/**
+ * Tabur sayılarından tümen istatistiği topla.
+ *
+ * Saldırı/savunma/delme TOPLANIR — iki kat tabur iki kat ateş demektir.
+ * Zırh, delme ve sertlik ise ORTALAMAdır: bir tümene tek tank taburu
+ * eklemek onu zırhlı yapmaz. Ortalama cephe genişliğine göre ağırlıklı,
+ * çünkü hatta fiilen duran şey genişliktir; genişliği sıfır olan istihkâm
+ * bölüğü zırh ortalamasını sulandırmaz.
+ */
 export function aggregate(t: DivisionTemplate) {
   let men = 0;
   let width = 0;
   let soft = 0;
   let brk = 0;
   let def = 0;
+  let hard = 0;
   let org = 0;
   let hp = 0;
   let supply = 0;
   let guns = 0;
   let count = 0;
+  // Genişliğe göre ağırlıklı ortalama için pay ve paydalar.
+  let armourW = 0;
+  let pierceW = 0;
+  let pierceBest = 0;
+  let bestWidth = 0;
+  let hardnessW = 0;
+  let weight = 0;
   for (const [kind, n] of Object.entries(t.battalions) as [BattalionKind, number][]) {
     const b = BATTALIONS[kind];
     men += b.men * n;
@@ -142,18 +301,44 @@ export function aggregate(t: DivisionTemplate) {
     soft += b.softAttack * n;
     brk += b.breakthrough * n;
     def += b.defence * n;
+    hard += b.hardAttack * n;
     org += b.organisation * n;
     hp += b.hp * n;
     supply += b.supplyUse * n;
     guns += b.guns * n;
     count += n;
+    const w = b.width * n;
+    armourW += b.armour * w;
+    pierceW += b.piercing * w;
+    if (b.piercing > pierceBest) {
+      pierceBest = b.piercing;
+      bestWidth = w;
+    } else if (b.piercing === pierceBest) {
+      bestWidth += w;
+    }
+    hardnessW += b.hardness * w;
+    weight += w;
   }
+  const pierceMean = weight > 0 ? pierceW / weight : 0;
+  // Cephe genişliğinin %15'i en iyi silahsa tam değerine ulaşılır.
+  const bestShare = weight > 0 ? Math.min(1, bestWidth / weight / 0.15) : 0;
   return {
     men,
     width,
     softAttack: soft,
     breakthrough: brk,
     defence: def,
+    hardAttack: hard,
+    armour: weight > 0 ? armourW / weight : 0,
+    // Delme düz ortalama DEĞİL. Düz ortalamada tüfekler tanksavarı yutar
+    // ve hiçbir piyade tümeni tank deleemez; saf "en iyi silah"ta ise tek
+    // bir tanksavar taburu koca tank kolordusunu durdurur. İkisi de yanlış.
+    //
+    // En iyi silaha YAKLAŞMAK cephede ona ayrılan paya bağlı: genişliğin
+    // %15'i tanksavarsa o silahın tam değeri, hiç yoksa düz ortalama.
+    // Sovyet tüfek tümeninin 1941 ile 1943 arasındaki farkı tam olarak bu.
+    piercing: weight > 0 ? pierceMean + (pierceBest - pierceMean) * bestShare : 0,
+    hardness: weight > 0 ? hardnessW / weight : 0,
     // Organizasyon tabur ORTALAMASIdır — büyük tümen daha çok org'a sahip olmaz.
     organisation: count > 0 ? org / count : 0,
     hp,
@@ -221,33 +406,63 @@ export const TEMPLATES: readonly DivisionTemplate[] = [
     battalions: { piyade: 4, makineli: 1, sahra_topcu: 1 },
   },
   // ── 2. Dünya Savaşı ──────────────────────────────────────────────────
-  // Not: oyunun tabur sınıfları 1915 için yazıldı. Zırhlı birlikler
-  // `breakthrough` değeri yüksek obüs/makineli karışımıyla temsil edilir;
-  // ayrı bir tank sınıfı eklemek bütün muharebe dengesini yeniden
-  // kalibre etmeyi gerektirirdi.
+  // Zırhlı tümenler gerçek tank taburu taşır. Tank nesli yıla göre
+  // değişir: 1939-40 hafif (Pz I/II, 7TP), 1941-43 orta (T-34, Pz IV,
+  // Sherman), 1944- ağır (Tiger, IS-2, Pershing).
   {
     id: 'de_panzer',
     name: 'Alman Panzer Tümeni',
     nation: 'alman',
-    battalions: { makineli: 8, obus: 4, piyade: 4, istihkam: 2 },
+    // 1939-40: Panzer I/II ağırlıklı, az sayıda III/IV.
+    battalions: { tank_hafif: 4, tank_orta: 2, motorlu: 4, sahra_topcu: 3, tanksavar: 1, istihkam: 1 },
+  },
+  {
+    id: 'de_panzer_43',
+    name: 'Alman Panzer Tümeni (1943)',
+    nation: 'alman',
+    // Panzer IV uzun namlu + Panther; tanksavar olarak 88'ler.
+    battalions: { tank_orta: 5, motorlu: 4, sahra_topcu: 3, tanksavar: 2, istihkam: 1 },
+  },
+  {
+    id: 'de_agir_panzer',
+    name: 'Ağır Panzer Taburu',
+    nation: 'alman',
+    // Tiger taburu: küçük, pahalı, delinmesi çok zor.
+    battalions: { tank_agir: 3, motorlu: 1, istihkam: 1 },
   },
   {
     id: 'de_ww2_piyade',
     name: 'Alman Piyade Tümeni (1939)',
     nation: 'alman',
-    battalions: { piyade: 9, makineli: 4, sahra_topcu: 4, obus: 2, istihkam: 1 },
+    battalions: { piyade: 9, makineli: 4, sahra_topcu: 4, obus: 2, tanksavar: 1, istihkam: 1 },
   },
   {
     id: 'su_tufek_tumen',
     name: 'Sovyet Tüfek Tümeni',
     nation: 'sovyet',
+    // 1941'de tanksavarı yok denecek kadar azdı — panzer karşısındaki
+    // çaresizliğin sayısal sebebi bu.
     battalions: { piyade: 9, makineli: 3, sahra_topcu: 4, istihkam: 1 },
+  },
+  {
+    id: 'su_tufek_tumen_43',
+    name: 'Sovyet Tüfek Tümeni (1943)',
+    nation: 'sovyet',
+    // Kursk'tan itibaren tanksavar yoğun: 45mm ve 76mm bataryaları.
+    battalions: { piyade: 9, makineli: 4, sahra_topcu: 4, tanksavar: 3, istihkam: 2 },
   },
   {
     id: 'su_tank_kolordu',
     name: 'Sovyet Tank Kolordusu',
     nation: 'sovyet',
-    battalions: { makineli: 7, obus: 3, piyade: 3, istihkam: 1 },
+    // T-34: 1941'de hiçbir Alman tankının kolay delemediği zırh.
+    battalions: { tank_orta: 6, motorlu: 3, sahra_topcu: 2, istihkam: 1 },
+  },
+  {
+    id: 'su_agir_tank',
+    name: 'Sovyet Ağır Tank Alayı',
+    nation: 'sovyet',
+    battalions: { tank_agir: 3, motorlu: 1, istihkam: 1 },
   },
   {
     id: 'pl_piyade_tumen',
@@ -256,10 +471,24 @@ export const TEMPLATES: readonly DivisionTemplate[] = [
     battalions: { piyade: 9, makineli: 2, sahra_topcu: 3 },
   },
   {
+    id: 'pl_suvari_tugay',
+    name: 'Polonya Süvari Tugayı',
+    nation: 'polonyali',
+    // Süvari tankla savaşmadı; tanksavar topu taşıyordu — efsanenin aksine.
+    battalions: { suvari: 6, makineli: 2, tanksavar: 1, sahra_topcu: 1 },
+  },
+  {
     id: 'us_piyade_tumen',
     name: 'Amerikan Piyade Tümeni',
     nation: 'amerikan',
-    battalions: { piyade: 9, makineli: 4, sahra_topcu: 4, obus: 2, istihkam: 2 },
+    battalions: { piyade: 9, makineli: 4, sahra_topcu: 4, obus: 2, tanksavar: 2, istihkam: 2 },
+  },
+  {
+    id: 'us_zirhli_tumen',
+    name: 'Amerikan Zırhlı Tümeni',
+    nation: 'amerikan',
+    // Sherman: delmesi iyi, zırhı Panther'in altında.
+    battalions: { tank_orta: 5, motorlu: 5, sahra_topcu: 3, tanksavar: 1, istihkam: 1 },
   },
   {
     id: 'us_deniz_piyade',
@@ -277,19 +506,27 @@ export const TEMPLATES: readonly DivisionTemplate[] = [
     id: 'uk_ww2_piyade',
     name: 'İngiliz Piyade Tümeni (1939)',
     nation: 'ingiliz',
-    battalions: { piyade: 9, makineli: 4, sahra_topcu: 4, obus: 1, istihkam: 2 },
+    battalions: { piyade: 9, makineli: 4, sahra_topcu: 4, obus: 1, tanksavar: 1, istihkam: 2 },
   },
   {
     id: 'uk_zirhli_tumen',
     name: 'İngiliz Zırhlı Tümeni',
     nation: 'ingiliz',
-    battalions: { makineli: 7, obus: 3, piyade: 3, istihkam: 1 },
+    // 1940-41 çölünde hafif kruvazör tanklar ağırlıktaydı.
+    battalions: { tank_hafif: 4, tank_orta: 2, motorlu: 3, sahra_topcu: 2, tanksavar: 1, istihkam: 1 },
   },
   {
     id: 'it_ww2_piyade',
     name: 'İtalyan Piyade Tümeni (1940)',
     nation: 'italyan',
     battalions: { piyade: 6, makineli: 2, sahra_topcu: 3 },
+  },
+  {
+    id: 'it_zirhli_tumen',
+    name: 'İtalyan Zırhlı Tümeni',
+    nation: 'italyan',
+    // M13/40: çölde "teneke kutu" lakaplı, zırhı ince.
+    battalions: { tank_hafif: 4, motorlu: 3, sahra_topcu: 2, istihkam: 1 },
   },
   // ── Rus ──────────────────────────────────────────────────────────────
   {
@@ -416,7 +653,7 @@ export const MAX_ENTRENCHMENT = 8;
 /** Birim sayacında çizilecek NATO sembolü. */
 export interface UnitSymbol {
   /** Kol: sembolün içine çizilen şekil. */
-  readonly branch: 'piyade' | 'topcu' | 'suvari' | 'deniz' | 'istihkam';
+  readonly branch: 'piyade' | 'topcu' | 'suvari' | 'deniz' | 'istihkam' | 'zirhli';
   /** Kademe işareti: tümen XX, tugay X, alay III, müfreze/tabur II. */
   readonly echelon: 'XX' | 'X' | 'III' | 'II';
 }
@@ -440,20 +677,25 @@ export function unitSymbol(templateId: string): UnitSymbol {
         : 'II';
 
   const b = t?.battalions ?? {};
-  const topcu = (b.sahra_topcu ?? 0) + (b.obus ?? 0);
-  const piyade = (b.piyade ?? 0) + (b.avci ?? 0);
+  const topcu = (b.sahra_topcu ?? 0) + (b.obus ?? 0) + (b.tanksavar ?? 0);
+  const piyade = (b.piyade ?? 0) + (b.avci ?? 0) + (b.motorlu ?? 0);
   const deniz = b.deniz_piyade ?? 0;
   const suvari = b.suvari ?? 0;
   const istihkam = b.istihkam ?? 0;
+  const zirhli =
+    (b.tank_hafif ?? 0) + (b.tank_orta ?? 0) + (b.tank_agir ?? 0) + (b.zirhli_oto ?? 0);
   const branch: UnitSymbol['branch'] =
-    topcu > piyade + deniz + suvari
-      ? 'topcu'
-      : suvari > piyade + deniz
-        ? 'suvari'
-        : deniz > piyade
-          ? 'deniz'
-          : istihkam > piyade
-            ? 'istihkam'
-            : 'piyade';
+    // Zırh her şeyin önünde: bir tank taburu olan birlik haritada tanktır.
+    zirhli > 0 && zirhli * 2 >= piyade
+      ? 'zirhli'
+      : topcu > piyade + deniz + suvari
+        ? 'topcu'
+        : suvari > piyade + deniz
+          ? 'suvari'
+          : deniz > piyade
+            ? 'deniz'
+            : istihkam > piyade
+              ? 'istihkam'
+              : 'piyade';
   return { branch, echelon };
 }

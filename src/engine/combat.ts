@@ -77,6 +77,10 @@ export interface UnitStats {
   softAttack: number;
   breakthrough: number;
   defence: number;
+  hardAttack: number;
+  armour: number;
+  piercing: number;
+  hardness: number;
   organisation: number;
   hp: number;
   supplyUse: number;
@@ -95,7 +99,13 @@ export function templateStats(templateId: string): UnitStats {
   return s;
 }
 
-/** Birimin mevcut durumuna göre etkin muharebe değerleri. */
+/**
+ * Birimin mevcut durumuna göre etkin muharebe değerleri.
+ *
+ * Ateş gücü ve koruma kadro/organizasyon/ikmalle ölçeklenir; zırh, delme ve
+ * sertlik ÖLÇEKLENMEZ — yarı mevcutlu bir tank taburunun zırhı incelmez,
+ * sadece daha az tankı kalır.
+ */
 export function effective(u: LandUnit) {
   const base = templateStats(u.templateId);
   const strRatio = u.maxStrength > 0 ? u.strength / u.maxStrength : 0;
@@ -105,8 +115,12 @@ export function effective(u: LandUnit) {
   const k = strRatio * (0.35 + 0.65 * orgRatio) * (0.4 + 0.6 * u.supplied) * expMul;
   return {
     attack: base.softAttack * k,
+    hardAttack: base.hardAttack * k,
     breakthrough: base.breakthrough * k,
     defence: base.defence * k,
+    armour: base.armour,
+    piercing: base.piercing,
+    hardness: base.hardness,
     width: base.width,
     guns: base.guns * strRatio,
     strRatio,
@@ -118,7 +132,18 @@ export interface CombatSide {
   units: LandUnit[];
   /** Cephe genişliği sınırını aşmayan, fiilen çarpışan birimler. */
   engaged: LandUnit[];
-  power: number;
+  /** Yumuşak hedefe toplam ateş. */
+  soft: number;
+  /** Zırhlı hedefe toplam ateş. */
+  hard: number;
+  /** Gelen ateşe karşı koruma: taarruzda delme, savunmada savunma. */
+  protection: number;
+  /** Genişliğe göre ağırlıklı ortalama zırh. */
+  armour: number;
+  /** Genişliğe göre ağırlıklı ortalama zırh delme. */
+  piercing: number;
+  /** Kuvvetin ne kadarı zırhlı hedef (0..1). */
+  hardness: number;
   guns: number;
   mods: CombatMods;
 }
@@ -141,14 +166,28 @@ function assemble(
     used += w;
   }
 
-  let power = 0;
+  let soft = 0;
+  let hard = 0;
+  let protection = 0;
   let guns = 0;
+  let armourW = 0;
+  let pierceW = 0;
+  let hardnessW = 0;
+  let weight = 0;
   const mods = { ...NO_MODS };
   let cmdCount = 0;
   for (const u of engaged) {
     const e = effective(u);
-    power += attacking ? e.attack : e.defence;
+    soft += e.attack;
+    hard += e.hardAttack;
+    protection += attacking ? e.breakthrough : e.defence;
     guns += e.guns;
+    // Zırh/delme/sertlik cephede kapladığı genişliğe göre ortalanır.
+    const w = Math.max(e.width, 0.5);
+    armourW += e.armour * w;
+    pierceW += e.piercing * w;
+    hardnessW += e.hardness * w;
+    weight += w;
     if (u.commanderId) {
       const cm = commanderMods(state, u.commanderId);
       for (const k of Object.keys(mods) as (keyof CombatMods)[]) mods[k] += cm[k];
@@ -158,7 +197,47 @@ function assemble(
   if (cmdCount > 1) {
     for (const k of Object.keys(mods) as (keyof CombatMods)[]) mods[k] /= cmdCount;
   }
-  return { side, units, engaged, power, guns, mods };
+  return {
+    side,
+    units,
+    engaged,
+    soft,
+    hard,
+    protection,
+    armour: weight > 0 ? armourW / weight : 0,
+    piercing: weight > 0 ? pierceW / weight : 0,
+    hardness: weight > 0 ? hardnessW / weight : 0,
+    guns,
+    mods,
+  };
+}
+
+/**
+ * Zırh karşılaşması. Delme zırhın yarısının altındaysa ateş yarıya düşer,
+ * delme zırha eşit ya da fazlaysa tam etki eder; arası doğrusal.
+ *
+ * Zırhsız kuvvete (armour 0) karşı daima 1 döner — 1915 cephelerinde bu
+ * kural hiç devreye girmez.
+ */
+export function pierceFactor(armour: number, piercing: number): number {
+  if (armour <= 0) return 1;
+  const r = piercing / armour;
+  if (r >= 1) return 1;
+  if (r <= 0.5) return 0.5;
+  return 0.5 + (r - 0.5) * 2 * 0.5;
+}
+
+/**
+ * Hedefin sertliğine göre etkin ateş: yumuşak kuvvete softAttack, zırhlıya
+ * hardAttack işler. Tanksavarsız bir piyade tümeni panzer tümenine karşı
+ * ateşinin neredeyse tamamını boşa harcar.
+ */
+export function effectiveFirepower(
+  soft: number,
+  hard: number,
+  targetHardness: number,
+): number {
+  return soft * (1 - targetHardness) + hard * targetHardness;
 }
 
 export interface CombatInput {
@@ -205,26 +284,50 @@ export function resolveLandCombat(
   const atkAmmo = ammoFactor(state, input.attacker);
   const defAmmo = ammoFactor(state, defender);
 
-  const atkMul =
+  // Saldıranın ateşini artıran şeyler: arazi, komutan, hava, kendi topçusu.
+  const atkFireMul =
     (1 + terrain.attackMod) *
     (1 + atk.mods.attack) *
     weather.movement *
     (1 + atk.guns * GUN_SUPPORT * atkAmmo * 0.01);
-  const defMul =
+  // Savunan da ateş eder; topçusu ona da çalışır.
+  const defFireMul = 1 + def.guns * GUN_SUPPORT * defAmmo * 0.01;
+  // Siper, tahkimat ve komutan savunmayı KORUMAYA yazar, ateşe değil.
+  const defProtMul =
     (1 + def.mods.defence) *
     (1 + avgEntrench * ENTRENCH_PER_LEVEL) *
-    (1 + input.fortLevel * FORT_PER_LEVEL) *
-    (1 + def.guns * GUN_SUPPORT * defAmmo * 0.01);
+    (1 + input.fortLevel * FORT_PER_LEVEL);
+  const atkProtMul = 1 + atk.mods.defence;
+
+  // Hedefin sertliğine göre etkin ateş, sonra zırh karşılaşması.
+  const atkPierce = pierceFactor(def.armour, atk.piercing);
+  const defPierce = pierceFactor(atk.armour, def.piercing);
 
   const A = Math.max(
     0.01,
-    (atk.power + input.navalSupport + input.airSupport) * atkMul * rng.jitter(0.18),
+    (effectiveFirepower(atk.soft, atk.hard, def.hardness) +
+      input.navalSupport +
+      input.airSupport) *
+      atkFireMul *
+      atkPierce *
+      rng.jitter(0.18),
   );
-  const D = Math.max(0.01, def.power * defMul * rng.jitter(0.18));
+  const D = Math.max(
+    0.01,
+    effectiveFirepower(def.soft, def.hard, atk.hardness) *
+      defFireMul *
+      defPierce *
+      rng.jitter(0.18),
+  );
 
-  // Oran tabanlı yıpratma: üstün taraf daha çok verir, daha az alır.
-  const atkShare = A / (A + D);
-  const defShare = 1 - atkShare;
+  const defProt = Math.max(0.01, def.protection * defProtMul);
+  const atkProt = Math.max(0.01, atk.protection * atkProtMul);
+
+  // Her taraf KARŞI TARAFIN korumasına karşı vurur. Saldıranın koruması
+  // delmesidir (`breakthrough`) — siperde oturan piyadenin delmesi düşük
+  // olduğu için taarruz pahalıdır, tankın yüksek olduğu için değildir.
+  const dmgToDef = A / (A + defProt);
+  const dmgToAtk = D / (D + atkProt);
 
   const lines: string[] = [];
   const losses = {
@@ -257,8 +360,8 @@ export function resolveLandCombat(
     return { menLost, broke };
   };
 
-  const defHit = applied(def, atkShare * 2, def.mods.orgRecovery);
-  const atkHit = applied(atk, defShare * 2, atk.mods.orgRecovery);
+  const defHit = applied(def, dmgToDef * 2, def.mods.orgRecovery);
+  const atkHit = applied(atk, dmgToAtk * 2, atk.mods.orgRecovery);
 
   losses[defender].men += defHit.menLost;
   losses[input.attacker].men += atkHit.menLost;
@@ -271,8 +374,8 @@ export function resolveLandCombat(
 
   lines.push(
     `Arazi: ${terrain.name} (cephe ${terrain.combatWidth}) · Hava: ${weather.name}`,
-    `Saldıran ${atk.engaged.length}/${atk.units.length} birlik cephede, güç ${A.toFixed(0)}`,
-    `Savunan ${def.engaged.length}/${def.units.length} birlik cephede, güç ${D.toFixed(0)}`,
+    `Saldıran ${atk.engaged.length}/${atk.units.length} birlik cephede, ateş ${A.toFixed(0)} · delme ${atkProt.toFixed(0)}`,
+    `Savunan ${def.engaged.length}/${def.units.length} birlik cephede, ateş ${D.toFixed(0)} · savunma ${defProt.toFixed(0)}`,
   );
   if (avgEntrench > 0.5) lines.push(`Siperlenme ${avgEntrench.toFixed(1)} → savunma +%${(avgEntrench * ENTRENCH_PER_LEVEL * 100).toFixed(0)}`);
   if (input.fortLevel > 0) lines.push(`Tahkimat ${input.fortLevel} → savunma +%${(input.fortLevel * FORT_PER_LEVEL * 100).toFixed(0)}`);
@@ -280,6 +383,26 @@ export function resolveLandCombat(
   if (input.airSupport > 0) lines.push(`Hava desteği +${input.airSupport.toFixed(0)}`);
   if (atkAmmo < 0.9) lines.push(`Saldıranın cephanesi kıt (×${atkAmmo.toFixed(2)})`);
   if (defAmmo < 0.9) lines.push(`Savunanın cephanesi kıt (×${defAmmo.toFixed(2)})`);
+  if (def.hardness > 0.1) {
+    lines.push(
+      `Savunan kuvvetin %${(def.hardness * 100).toFixed(0)}'i zırhlı — saldıranın yumuşak ateşi boşa gidiyor.`,
+    );
+  }
+  if (atk.hardness > 0.1) {
+    lines.push(
+      `Saldıran kuvvetin %${(atk.hardness * 100).toFixed(0)}'i zırhlı — savunanın yumuşak ateşi boşa gidiyor.`,
+    );
+  }
+  if (atkPierce < 1) {
+    lines.push(
+      `Saldıran zırhı delemiyor: delme ${atk.piercing.toFixed(0)} < zırh ${def.armour.toFixed(0)} (×${atkPierce.toFixed(2)})`,
+    );
+  }
+  if (defPierce < 1) {
+    lines.push(
+      `Savunan zırhı delemiyor: delme ${def.piercing.toFixed(0)} < zırh ${atk.armour.toFixed(0)} (×${defPierce.toFixed(2)})`,
+    );
+  }
   lines.push(
     `Kayıp — saldıran ${atkHit.menLost}, savunan ${defHit.menLost}`,
     defenderBroke

@@ -181,7 +181,14 @@ export type BattalionKind =
   | 'sahra_topcu'
   | 'obus' // ağır obüs
   | 'makineli'
-  | 'deniz_piyade'; // Royal Naval Division / Fransız denizci
+  | 'deniz_piyade' // Royal Naval Division / Fransız denizci
+  // ── Zırhlı ve motorlu sınıflar ────────────────────────────────────────
+  | 'zirhli_oto' // zırhlı otomobil — 1915'te de sahada
+  | 'motorlu' // motorlu piyade: zırhsız ama sert hedef
+  | 'tank_hafif'
+  | 'tank_orta'
+  | 'tank_agir'
+  | 'tanksavar'; // tanksavar bataryası: zırhı yok, delmesi yüksek
 
 export interface BattalionProfile {
   readonly id: BattalionKind;
@@ -191,9 +198,21 @@ export interface BattalionProfile {
   readonly width: number;
   /** Yumuşak hedefe saldırı (siperdeki piyade). */
   readonly softAttack: number;
-  /** Tahkimata/zırha karşı delme gücü. */
+  /**
+   * Taarruz ederken gelen ateşe karşı koruma — savunmadaki `defence`in
+   * saldırgan karşılığı. Siperde oturan piyadenin delmesi düşüktür; tank
+   * tam da bunun için vardır.
+   */
   readonly breakthrough: number;
   readonly defence: number;
+  /** Sert (zırhlı) hedefe saldırı. */
+  readonly hardAttack: number;
+  /** Zırh kalınlığı; düşmanın `piercing` değeri bunu aşamazsa ateşi yarılanır. */
+  readonly armour: number;
+  /** Zırh delme — düşman zırhını aşmak için gereken değer. */
+  readonly piercing: number;
+  /** Sertlik 0..1: birimin ne kadarının zırhlı hedef sayıldığı. */
+  readonly hardness: number;
   /** Organizasyon havuzuna katkı. */
   readonly organisation: number;
   /** Dayanıklılık havuzuna katkı. */
@@ -245,8 +264,17 @@ export interface LandUnit {
   commanderId: string | null;
   /** Verilen emir. */
   order: LandOrder | null;
-  /** Hareket ilerlemesi 0..1. */
+  /**
+   * Hareket ilerlemesi 0..1. Bir günlük yolu aşan adımlar birden çok güne
+   * yayılır; 1'e ulaştığında birlik hedef ile varır.
+   */
   moveProgress: number;
+  /**
+   * İlerlemenin hangi ile doğru biriktiği. Emir değişirse yarım kalan
+   * yürüyüş sayılmaz — yoksa bir yöne yürümeye başlayıp fikir değiştiren
+   * birlik başka bir ile bedavaya sıçrardı.
+   */
+  marchingTo: ProvinceId | null;
   /** Bu tur muharebeye girdi mi (çizim/rapor için). */
   inCombat: boolean;
   /** Karaya çıkarılmayı bekleyen birlik hangi filoda. */

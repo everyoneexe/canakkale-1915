@@ -155,7 +155,15 @@ function placeDivisions(
   return slots.slice(0, nation.divisions);
 }
 
-const TEMPLATE_FOR: Record<string, string> = {
+/**
+ * Prosedürel tümenin hangi şablonla kurulacağı. Savaşa göre AYRI tablolar:
+ * iki savaşın ulus kimlikleri çakışıyor (`France`, `Bulgaria`, `Canada`),
+ * tek tabloda 1940 Fransası 1915 tümeniyle sahaya çıkardı.
+ *
+ * Burada adı geçmeyen ulus varsayılana düşer; pakette elle yazılmış
+ * birliği olan uluslar zaten bu yoldan hiç geçmez.
+ */
+const TEMPLATE_FOR_WW1: Record<string, string> = {
   'German Empire': 'os_piyade_tumen',
   'Austro-Hungarian Empire': 'os_piyade_tumen',
   'Ottoman Empire': 'os_piyade_tumen',
@@ -168,6 +176,30 @@ const TEMPLATE_FOR: Record<string, string> = {
   Canada: 'anzac_tumen',
   India: 'hint_tugay',
   Russia: 'ru_piyade_tumen',
+};
+
+const TEMPLATE_FOR_WW2: Record<string, string> = {
+  Germany: 'de_ww2_piyade',
+  Italy: 'it_ww2_piyade',
+  'Empire of Japan': 'jp_piyade_tumen',
+  Poland: 'pl_piyade_tumen',
+  'United Kingdom': 'uk_ww2_piyade',
+  France: 'uk_ww2_piyade',
+  USSR: 'su_tufek_tumen',
+  'United States': 'us_piyade_tumen',
+  Canada: 'uk_ww2_piyade',
+  Australia: 'uk_ww2_piyade',
+  'New Zealand': 'uk_ww2_piyade',
+  'Union of South Africa': 'uk_ww2_piyade',
+  Belgium: 'uk_ww2_piyade',
+  Netherlands: 'uk_ww2_piyade',
+  Norway: 'uk_ww2_piyade',
+  Greece: 'it_ww2_piyade',
+  Yugoslavia: 'it_ww2_piyade',
+  Hungary: 'it_ww2_piyade',
+  Romania: 'it_ww2_piyade',
+  Bulgaria: 'it_ww2_piyade',
+  Finland: 'it_ww2_piyade',
 };
 
 /** Ad → kimlik parçası. */
@@ -241,23 +273,33 @@ function buildWorldSetup(th: Theatre): WorldSetup {
   // Başkentler: yüksek zafer puanı ve büyük ikmal merkezi.
   for (const spec of nationList) {
     const list = byNation.get(spec.id);
-    if (!list || list.length === 0 || !spec.capital) continue;
-    const cap = nearestProvince(spec.capital[0], spec.capital[1], list);
+    if (!list || list.length === 0) continue;
+
+    const cap = spec.capital ? nearestProvince(spec.capital[0], spec.capital[1], list) : null;
     // Cephe kutusu haritayı kırpıyor: Kafkas Cephesi'nde yalnız 76 il var.
     // Mesafe sınırı olmadan "Berlin'e en yakın il" Kafkasya'da bir Rus ili
     // seçiliyor, zafer koşulu da onu Alman başkenti sayıp oyunu üçüncü
     // günde bitiriyordu. Başkent ancak GERÇEKTEN haritadaysa sayılır.
-    if (!cap || !nearEnough(cap, spec.capital)) continue;
-    capitals[spec.id] = cap.id;
-    victoryPoints[cap.id] = 25;
-    supplyHubs[cap.id] = Math.round(spec.manpower / 6);
+    if (cap && spec.capital && nearEnough(cap, spec.capital)) {
+      capitals[spec.id] = cap.id;
+      victoryPoints[cap.id] = 25;
+      supplyHubs[cap.id] = Math.round(spec.manpower / 6);
+    }
 
     // Büyük iller ikincil ikmal merkezi olur.
+    //
+    // Bunlar ESKİDEN başkent kontrolünün içindeydi: başkent haritanın
+    // dışında kalınca ulus TEK BİR ikmal merkezi bile alamıyordu. Kafkas
+    // Cephesi'nde İstanbul da Petrograd da bbox'ın dışında olduğu için
+    // haritada sıfır ikmal merkezi vardı ve 21 tarihsel tümenin 20'si
+    // beşinci günde %0 ikmalle eriyordu. Cephede savaşan ordunun gerisinde
+    // daima bir menzil deposu vardır; başkentin uzakta olması bunu
+    // değiştirmez.
     const big = [...list]
       .sort((a, b) => (metaOf(b.id)?.cells ?? 0) - (metaOf(a.id)?.cells ?? 0))
       .slice(0, Math.max(2, Math.round(list.length / 14)));
     for (const p of big) {
-      if (p.id === cap.id) continue;
+      if (p.id === capitals[spec.id]) continue;
       victoryPoints[p.id] = Math.max(victoryPoints[p.id]!, 3);
       supplyHubs[p.id] = Math.max(supplyHubs[p.id]!, Math.round(spec.manpower / 30));
     }
@@ -279,7 +321,8 @@ function buildWorldSetup(th: Theatre): WorldSetup {
       if (o && o !== side) hostile.add(p.id);
     }
 
-    const templateId = TEMPLATE_FOR[spec.id] ?? 'os_piyade_tumen';
+    const table = th.war === 'ww2' ? TEMPLATE_FOR_WW2 : TEMPLATE_FOR_WW1;
+    const templateId = table[spec.id] ?? (th.war === 'ww2' ? 'it_ww2_piyade' : 'os_piyade_tumen');
     const tpl = TEMPLATE_BY_ID[templateId]!;
     const agg = aggregate(tpl);
     // Çizim ulusu şablonun kendi alanından; elle tutulan ikinci bir
@@ -309,6 +352,7 @@ function buildWorldSetup(th: Theatre): WorldSetup {
         commanderId: null,
         order: null,
         moveProgress: 0,
+        marchingTo: null,
         inCombat: false,
         embarkedIn: arrives > 0 ? 'bekleme' : null,
         ...(arrives > 0 ? { arrivesOn: arrives } : {}),
@@ -397,10 +441,31 @@ function buildWorldSetup(th: Theatre): WorldSetup {
       commanderId: null,
       order: null,
       moveProgress: 0,
+      marchingTo: null,
       inCombat: false,
       embarkedIn: fArrives > 0 ? 'bekleme' : null,
       ...(fArrives > 0 ? { arrivesOn: fArrives } : {}),
     };
+  }
+
+  // Tarihsel mevzi, tanımı gereği o tarafın toprağıdır.
+  //
+  // Hata: paket birlikleri gerçek başlangıç mevzilerine konuyor, ama
+  // toprak sahipliği Natural Earth sınırlarından geliyordu. Barbarossa
+  // 22 Haziran 1941'de başlar ve Guderian'ın panzer grubu Alman işgali
+  // altındaki Lublin'dedir — harita ise Lublin'i Müttefik sayıyordu.
+  // Sonuç: birlik düşman toprağında kalıyor, ikmal yayılımı ona hiç
+  // ulaşmıyor, organizasyonu her gün eriyor ve TEK BİR GÜN BİLE
+  // savaşamadan felç oluyordu. Ölçüm: Kafkas'ta 21 paket biriminin 20'si,
+  // Normandiya'da 17'nin 15'i beşinci günde %0 ikmaldeydi. On beş cephenin
+  // elle yazılmış bütün teşkilâtı bu yüzden sahnede yoktu.
+  const claimed = new Set<ProvinceId>();
+  for (const u of Object.values(landUnits)) {
+    if (u.embarkedIn) continue; // sonradan gelen takviye kendi toprağını açmaz
+    if (!u.id.startsWith('pk_')) continue;
+    if (claimed.has(u.location)) continue; // ilk gelen tutar
+    claimed.add(u.location);
+    owners[u.location] = u.side;
   }
 
   return { owners, capitals, victoryPoints, supplyHubs, landUnits, fleets };

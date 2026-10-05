@@ -1372,6 +1372,10 @@ export class MapView {
           // Topçu: dolu daire.
           g.circle((L + R) / 2, 0, 2.6).fill({ color: col, alpha: 0.85 });
           break;
+        case 'zirhli':
+          // Zırhlı: NATO oval. Elips çizilmiyor, iki yay + iki kenar.
+          g.ellipse((L + R) / 2, 0, (R - L) / 2, (B - T) / 2.6).stroke(line);
+          break;
         case 'suvari':
           // Süvari: tek eğik çizgi.
           g.moveTo(L, B).lineTo(R, T).stroke(line);
