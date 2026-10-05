@@ -210,7 +210,10 @@ export const THEATRES: readonly Theatre[] = [
       'Alman Doğu Afrikası\'nda Lettow-Vorbeck\'in küçük kuvveti dört yıl '
       + 'boyunca kendisinden kat kat büyük İtilaf ordularını oyaladı. '
       + 'Teslim 25 Kasım 1918\'de, Avrupa\'daki ateşkesten iki hafta sonra oldu.',
-    start: '1914-08-03',
+    // 3 Ağustos'ta cephede hiçbir şey olmamıştı. İlk kara harekâtı
+    // 5 Ağustos: Uganda birlikleri Viktorya Gölü yakınındaki Alman
+    // karakollarına saldırdı.
+    start: '1914-08-05',
     end: '1918-11-25',
     bbox: [27, -13, 42, 3],
     pin: [35, -6],

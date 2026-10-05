@@ -4,6 +4,9 @@ import { MEZOPOTAMYA_PACK } from './ww1-mezopotamya.ts';
 import { SINA_FILISTIN_PACK } from './ww1-sina-filistin.ts';
 import { BATI_PACK } from './ww1-bati.ts';
 import { DOGU_PACK } from './ww1-dogu.ts';
+import { ITALYAN_PACK } from './ww1-italyan.ts';
+import { BALKAN_PACK } from './ww1-balkan.ts';
+import { DOGU_AFRIKA_PACK } from './ww1-dogu-afrika.ts';
 
 /**
  * Cephe içerik paketleri — `Theatre.id` → paket.
@@ -17,6 +20,9 @@ export const FRONT_PACKS: Readonly<Record<string, FrontPack>> = {
   [SINA_FILISTIN_PACK.theatre]: SINA_FILISTIN_PACK,
   [BATI_PACK.theatre]: BATI_PACK,
   [DOGU_PACK.theatre]: DOGU_PACK,
+  [ITALYAN_PACK.theatre]: ITALYAN_PACK,
+  [BALKAN_PACK.theatre]: BALKAN_PACK,
+  [DOGU_AFRIKA_PACK.theatre]: DOGU_AFRIKA_PACK,
 };
 
 export type { FrontPack, FrontFormation } from './pack.ts';
