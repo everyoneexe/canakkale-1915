@@ -217,6 +217,18 @@ türetmek hem çalıştı hem de rölyefle %100 tutarlı sonuç verdi.
   altındaki detaylı araziyi tamamen örtüyordu. Küre bir *cephe seçici*:
   uzakta kim nerede, yakında arazi. Karışım `1 → 0,18` iner, sıfırlanmaz —
   sahiplik yine okunsun.
+* **Küre zoom sınırları ve kaydırma.** Alt sınır sabit 110 px'ti: küre
+  ekranın ortasında minik bir topa düşebiliyordu. Artık tüm kürenin kadraja
+  oturduğu yarıçapın altına inilemez. Üst sınır merkezde **400 px/derece**
+  (≈280 m/ekran pikseli) — akan mozaik daha incesini verebilir ama küre bir
+  cephe seçici; ötesinde küre düzleme dönüşüp seçim bağlamı kayboluyor.
+  Pencere boyu değişince zoom ORANI korunur, yoksa küre sıçrıyordu.
+
+  Sürükleme derece/piksel **sabit 0,3** idi: yakınlaştırınca tek piksellik
+  hareket küreyi savuruyordu. Ortografik kürede merkezde bir ekran pikseli
+  `180/(π·R)` dereceye denk gelir; bu değerle imlecin altındaki nokta imlecin
+  altında kalır ve kaydırma zoom'la kendiliğinden ağırlaşır — azami
+  yakınlıkta 200 px sürükleme yüzeyi tam 200 px kaydırır.
 
 Dünya verisi (2,9 MB) **ayrı bir pakete** bölünür ve yalnız bir dünya cephesi
 seçilince indirilir; Çanakkale oynayan hiç indirmez.
