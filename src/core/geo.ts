@@ -11,7 +11,40 @@ import { MinHeap } from './heap.ts';
  * indirilmez (dinamik import).
  */
 
-export type MapKind = 'canakkale' | 'dunya';
+/**
+ * Kendi yüksek çözünürlüklü haritası olan tiyatrolar.
+ *
+ * Yükleyici AYRI AYRI yazılır, şablonlu `import()` ile DEĞİL: şablon yolu
+ * TypeScript'i `data/` altındaki bütün JSON'ları çözmeye zorluyor ve
+ * 2,5 MB'lık `world.json` yüzünden `tsc` beş dakikada bitmiyor. Her satır
+ * ayrıca Vite'a ayrı parça ürettirir — Çanakkale oynayan Kafkas
+ * haritasını indirmez.
+ *
+ * Yeni harita eklemek için:
+ *   1. `tools/fetch_terrain.py <ad>` ve `tools/build_map.py <ad>`
+ *   2. buraya bir satır
+ *   3. `theatres.ts` içinde `ownMap: '<ad>'`
+ */
+export type DetailedMapId = 'canakkale';
+
+interface DetailedMap {
+  /** `public/` altındaki rölyef dokusu. */
+  readonly relief: string;
+  readonly load: () => Promise<{ default: unknown }>;
+}
+
+// AÇIK TİP ŞART. `as const` bırakılırsa TypeScript `map.json`'ın tam
+// değişmez tipini (1 MB'lık sayı dizisi) üretmeye çalışıyor ve
+// `tsc --noEmit` beş saniyeden iki dakikaya çıkıyor.
+export const DETAILED_MAPS: Record<DetailedMapId, DetailedMap> = {
+  canakkale: {
+    relief: 'relief.png',
+    load: () => import('../data/map.json'),
+  },
+};
+
+/** `'dunya'` ortak Natural Earth haritası; kalanlar kendi haritası olanlar. */
+export type MapKind = DetailedMapId | 'dunya';
 
 const M_PER_DEG_LAT = 110574.0;
 const DEG = Math.PI / 180;
@@ -210,11 +243,9 @@ export async function loadMap(
   let map: GameMap;
   let relief: ReliefBox;
 
-  if (kind === 'canakkale') {
-    // DİNAMİK IMPORT KASITLI: world.json 2,5 MB. Statik import iki haritayı
-    // da tek pakete koyar ve Çanakkale oynayan herkes boşuna indirir.
-    // Modül yolu derleme zamanında bilinse de ayrı parça olması gerekiyor.
-    const raw = (await import('../data/map.json')).default as unknown as {
+  if (kind !== 'dunya') {
+    // Yükleyici tablosu DETAILED_MAPS'te; oradaki nota bakın.
+    const raw = (await DETAILED_MAPS[kind].load()).default as unknown as {
       origin: LonLat;
       bounds: { minX: number; minY: number; maxX: number; maxY: number };
       relief: Record<string, number | string>;
@@ -252,7 +283,7 @@ export async function loadMap(
       landmarks: [],
     };
     relief = {
-      image: 'relief.png',
+      image: DETAILED_MAPS[kind].relief,
       width: raw.relief.width as number,
       height: raw.relief.height as number,
       minX: raw.relief.minX as number,
