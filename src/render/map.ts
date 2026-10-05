@@ -22,7 +22,7 @@ import {
 } from '../core/geo.ts';
 import { C, LAYER } from '../style/tokens.ts';
 import { fortRange, liveShips } from '../engine/naval.ts';
-import { TERRAINS } from '../data/units.ts';
+import { TERRAINS, unitSymbol } from '../data/units.ts';
 import { TerrainTiles } from './tiles.ts';
 import { zscale } from './terrain-mosaic.ts';
 
@@ -80,6 +80,15 @@ const COUNTER_STYLE = new TextStyle({
   fontWeight: '700',
   fill: C.text,
   letterSpacing: 0.4,
+});
+
+/** Kademe işareti (XX / X / III) — kutunun üstünde, küçük ve soluk. */
+const ECHELON_STYLE = new TextStyle({
+  fontFamily: 'JetBrains Mono, monospace',
+  fontSize: 7,
+  fontWeight: '700',
+  fill: C.textDim,
+  letterSpacing: 0.6,
 });
 
 /** Ekranda aynı anda gösterilecek azami etiket — fazlası okunmaz hâle geliyor. */
@@ -522,6 +531,12 @@ export class MapView {
     // Kampanya kadrajında tiyatro ~130 km / 1600 px ≈ 81 m/piksel; 90 m'lik
     // çizgi bir pikselin altında kalıp kayboluyordu.
     const w = Math.max(300, 3.0 / this.zoom);
+    // Siper tarakları yalnız hattın ayrıntısının okunduğu yakınlıkta. Tüm
+    // kampanya kadrajında çizilince hat kalın bir tırtıla dönüşüyor.
+    const teeth = this.zoom * 1000 > 18;
+    const tooth = w * 2.4;
+    const gap = w * 5;
+
     for (const i of front) {
       const e = this.sharedEdges[i]!;
       // Koyu astar: hat hem Osmanlı kırmızısının hem İtilaf mavisinin
@@ -534,6 +549,23 @@ export class MapView {
         .moveTo(e.x1, e.y1)
         .lineTo(e.x2, e.y2)
         .stroke({ width: w, color: C.accent, alpha: 0.95 });
+
+      if (!teeth) continue;
+      // Hat boyunca eşit aralıklı dik tırnaklar — siper işareti.
+      const dx = e.x2 - e.x1;
+      const dy = e.y2 - e.y1;
+      const len = Math.hypot(dx, dy);
+      if (len < gap) continue;
+      const ux = dx / len;
+      const uy = dy / len;
+      for (let d = gap / 2; d < len; d += gap) {
+        const px = e.x1 + ux * d;
+        const py = e.y1 + uy * d;
+        this.gFront
+          .moveTo(px, py)
+          .lineTo(px - uy * tooth, py + ux * tooth)
+          .stroke({ width: w * 0.8, color: C.accent, alpha: 0.8 });
+      }
     }
   }
 
@@ -1242,7 +1274,10 @@ export class MapView {
         const g = new Graphics();
         const t = new Text({ text: '', style: COUNTER_STYLE });
         t.anchor.set(0.5);
-        c.addChild(g, t);
+        // Kademe işareti (XX / X / III) kutunun ÜSTÜNDE ayrı yazı.
+        const e = new Text({ text: '', style: ECHELON_STYLE });
+        e.anchor.set(0.5, 1);
+        c.addChild(g, t, e);
         this.counterPool.push(c);
         this.gUnits.addChild(c);
       }
@@ -1253,7 +1288,20 @@ export class MapView {
 
     const scale = 1 / this.zoom;
     const v = this.viewBox();
-    const stacks = new Map<ProvinceId, { side: Side; men: number; n: number; combat: boolean }>();
+    const stacks = new Map<
+      ProvinceId,
+      {
+        side: Side;
+        men: number;
+        n: number;
+        combat: boolean;
+        org: number;
+        maxOrg: number;
+        /** Yığının EN KALABALIK biriminin şablonu — sembol ondan gelir. */
+        tpl: string;
+        topMen: number;
+      }
+    >();
     for (const u of Object.values(s.landUnits)) {
       if (u.embarkedIn || u.strength <= 0) continue;
       if (!s.provinces[u.location]?.seen[s.playerSide] && u.side !== s.playerSide) continue;
@@ -1262,8 +1310,23 @@ export class MapView {
         cur.men += u.strength;
         cur.n++;
         cur.combat ||= u.inCombat;
+        cur.org += u.organisation;
+        cur.maxOrg += u.maxOrganisation;
+        if (u.strength > cur.topMen) {
+          cur.topMen = u.strength;
+          cur.tpl = u.templateId;
+        }
       } else if (!cur) {
-        stacks.set(u.location, { side: u.side, men: u.strength, n: 1, combat: u.inCombat });
+        stacks.set(u.location, {
+          side: u.side,
+          men: u.strength,
+          n: 1,
+          combat: u.inCombat,
+          org: u.organisation,
+          maxOrg: u.maxOrganisation,
+          tpl: u.templateId,
+          topMen: u.strength,
+        });
       }
     }
 
@@ -1285,18 +1348,63 @@ export class MapView {
       c.scale.set(scale * (st.combat ? 1.12 : 1));
       const g = c.children[0] as Graphics;
       const t = c.children[1] as Text;
+      const eTxt = c.children[2] as Text;
       const col = st.side === 'ottoman' ? C.ottoman : C.entente;
+      const sym = unitSymbol(st.tpl);
       const w = 34;
       const h = 17;
+
       g.clear()
         .rect(-w / 2, -h / 2, w, h)
         .fill({ color: C.panel, alpha: 0.92 })
         .stroke({ width: 1.2, color: st.combat ? C.mine : col, alpha: 1 });
-      g.moveTo(-w / 2 + 3, -h / 2 + 3)
-        .lineTo(-w / 2 + 11, h / 2 - 3)
-        .moveTo(-w / 2 + 11, -h / 2 + 3)
-        .lineTo(-w / 2 + 3, h / 2 - 3)
-        .stroke({ width: 1, color: col, alpha: 0.85 });
+
+      // ── Kol sembolü ──
+      // Hepsi aynı "X" ile çiziliyordu: haritada topçu alayı ile piyade
+      // tümeni ayırt edilemiyordu.
+      const L = -w / 2 + 3;
+      const R = -w / 2 + 11;
+      const T = -h / 2 + 3;
+      const B = h / 2 - 3;
+      const line = { width: 1, color: col, alpha: 0.85 } as const;
+      switch (sym.branch) {
+        case 'topcu':
+          // Topçu: dolu daire.
+          g.circle((L + R) / 2, 0, 2.6).fill({ color: col, alpha: 0.85 });
+          break;
+        case 'suvari':
+          // Süvari: tek eğik çizgi.
+          g.moveTo(L, B).lineTo(R, T).stroke(line);
+          break;
+        case 'istihkam':
+          // İstihkâm: köşeli "E" sırtı.
+          g.moveTo(R, T).lineTo(L, T).lineTo(L, B).lineTo(R, B).stroke(line);
+          g.moveTo(L, 0).lineTo(R - 2, 0).stroke(line);
+          break;
+        case 'deniz':
+          // Deniz piyadesi: piyade çaprazı + altında dalga çizgisi.
+          g.moveTo(L, T).lineTo(R, B).moveTo(R, T).lineTo(L, B).stroke(line);
+          g.moveTo(L, B + 1.5).lineTo(R, B + 1.5).stroke({ ...line, alpha: 0.6 });
+          break;
+        default:
+          // Piyade: çapraz.
+          g.moveTo(L, T).lineTo(R, B).moveTo(R, T).lineTo(L, B).stroke(line);
+      }
+
+      // ── Organizasyon çubuğu ──
+      // Muharebeyi kıran şey insan kaybı değil organizasyon; sayaçta
+      // görünmediği için oyuncu hangi birliğin kırılmak üzere olduğunu
+      // ancak panele tıklayarak öğreniyordu.
+      const ratio = st.maxOrg > 0 ? Math.max(0, Math.min(1, st.org / st.maxOrg)) : 0;
+      const barY = h / 2 + 1.5;
+      g.rect(-w / 2, barY, w, 2).fill({ color: 0x000000, alpha: 0.55 });
+      g.rect(-w / 2, barY, w * ratio, 2).fill({
+        color: ratio > 0.6 ? 0x7fc08a : ratio > 0.3 ? C.accent : C.mine,
+        alpha: 0.95,
+      });
+
+      eTxt.text = sym.echelon;
+      eTxt.y = -h / 2 - 1;
       t.text = st.men >= 1000 ? `${Math.round(st.men / 1000)}B` : String(st.men);
       t.x = 6;
       t.y = 0;

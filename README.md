@@ -295,6 +295,29 @@ Tek ile ait kenarlar il grafiğinin **dış sınırıdır** ve ayrıca çizilir;
 çizilmeyince taraf boyası arazinin ortasında düz bir dikey çizgide kesilip
 çizim hatası gibi duruyordu.
 
+**Birim sayaçları.** Hepsi aynı "X" kutusuyla çiziliyordu: haritada topçu
+alayı ile piyade tümeni ayırt edilemiyordu. Sayaç artık NATO sembolojisi
+kullanır — kademe kutunun üstünde (`XX` tümen, `X` tugay, `III` alay,
+`II` müfreze/tabur), kol kutunun içinde:
+
+| kol | işaret | nereden |
+| --- | --- | --- |
+| piyade | çapraz | tabur karışımında piyade ağırlıkta |
+| topçu | dolu daire | sahra topçu + obüs çoğunlukta |
+| süvari | tek eğik çizgi | süvari çoğunlukta |
+| deniz piyade | çapraz + alt çizgi | `deniz_piyade` çoğunlukta |
+| istihkâm | köşeli E | `istihkam` çoğunlukta |
+
+Kademe şablon ADINDAN türetilir (veri Türkçe ve tutarlı), kol tabur
+karışımının ağırlığından. Kutunun altında **organizasyon çubuğu** var:
+muharebeyi kıran şey insan kaybı değil organizasyon, ama sayaçta
+görünmediği için oyuncu hangi birliğin kırılmak üzere olduğunu ancak
+panele tıklayarak öğreniyordu.
+
+**Siper tarakları.** Cephe hattı boyunca dik tırnaklar, yalnız hattın
+ayrıntısının okunduğu yakınlıkta. Kampanya kadrajında çizilince hat kalın
+bir tırtıla dönüşüyor.
+
 Tipografi: başlıklarda Archivo 800, her yerde JetBrains Mono. Rölyef, kuzeybatı
 ışıklı tepe gölgelemesiyle çizilir — Conkbayırı ve Kocaçimen'in Arıburnu'na
 nasıl hâkim olduğu ancak böyle okunuyor.
