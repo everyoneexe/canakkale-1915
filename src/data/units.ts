@@ -220,6 +220,77 @@ export const TEMPLATES: readonly DivisionTemplate[] = [
     nation: 'hint',
     battalions: { piyade: 4, makineli: 1, sahra_topcu: 1 },
   },
+  // ── 2. Dünya Savaşı ──────────────────────────────────────────────────
+  // Not: oyunun tabur sınıfları 1915 için yazıldı. Zırhlı birlikler
+  // `breakthrough` değeri yüksek obüs/makineli karışımıyla temsil edilir;
+  // ayrı bir tank sınıfı eklemek bütün muharebe dengesini yeniden
+  // kalibre etmeyi gerektirirdi.
+  {
+    id: 'de_panzer',
+    name: 'Alman Panzer Tümeni',
+    nation: 'alman',
+    battalions: { makineli: 8, obus: 4, piyade: 4, istihkam: 2 },
+  },
+  {
+    id: 'de_ww2_piyade',
+    name: 'Alman Piyade Tümeni (1939)',
+    nation: 'alman',
+    battalions: { piyade: 9, makineli: 4, sahra_topcu: 4, obus: 2, istihkam: 1 },
+  },
+  {
+    id: 'su_tufek_tumen',
+    name: 'Sovyet Tüfek Tümeni',
+    nation: 'sovyet',
+    battalions: { piyade: 9, makineli: 3, sahra_topcu: 4, istihkam: 1 },
+  },
+  {
+    id: 'su_tank_kolordu',
+    name: 'Sovyet Tank Kolordusu',
+    nation: 'sovyet',
+    battalions: { makineli: 7, obus: 3, piyade: 3, istihkam: 1 },
+  },
+  {
+    id: 'pl_piyade_tumen',
+    name: 'Polonya Piyade Tümeni',
+    nation: 'polonyali',
+    battalions: { piyade: 9, makineli: 2, sahra_topcu: 3 },
+  },
+  {
+    id: 'us_piyade_tumen',
+    name: 'Amerikan Piyade Tümeni',
+    nation: 'amerikan',
+    battalions: { piyade: 9, makineli: 4, sahra_topcu: 4, obus: 2, istihkam: 2 },
+  },
+  {
+    id: 'us_deniz_piyade',
+    name: 'Amerikan Deniz Piyade Tümeni',
+    nation: 'amerikan',
+    battalions: { deniz_piyade: 9, makineli: 4, sahra_topcu: 3, istihkam: 2 },
+  },
+  {
+    id: 'jp_piyade_tumen',
+    name: 'Japon Piyade Tümeni',
+    nation: 'japon',
+    battalions: { piyade: 9, avci: 3, makineli: 2, sahra_topcu: 3 },
+  },
+  {
+    id: 'uk_ww2_piyade',
+    name: 'İngiliz Piyade Tümeni (1939)',
+    nation: 'ingiliz',
+    battalions: { piyade: 9, makineli: 4, sahra_topcu: 4, obus: 1, istihkam: 2 },
+  },
+  {
+    id: 'uk_zirhli_tumen',
+    name: 'İngiliz Zırhlı Tümeni',
+    nation: 'ingiliz',
+    battalions: { makineli: 7, obus: 3, piyade: 3, istihkam: 1 },
+  },
+  {
+    id: 'it_ww2_piyade',
+    name: 'İtalyan Piyade Tümeni (1940)',
+    nation: 'italyan',
+    battalions: { piyade: 6, makineli: 2, sahra_topcu: 3 },
+  },
   // ── Rus ──────────────────────────────────────────────────────────────
   {
     id: 'ru_piyade_tumen',
