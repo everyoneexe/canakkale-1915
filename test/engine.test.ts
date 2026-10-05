@@ -18,6 +18,7 @@ import {
 } from '../src/engine/combat.ts';
 import { THEATRES } from '../src/data/theatres.ts';
 import { newWorldGame } from '../src/engine/world-scenario.ts';
+import { issueLandOrder } from '../src/engine/orders.ts';
 
 /**
  * Bu dosyadaki her test, geliştirme sırasında FİİLEN yaşanmış bir hatayı
@@ -285,6 +286,96 @@ describe('kampanya', () => {
     assert.equal(u.location, hedef, `${gun} günde Gelibolu -> Kireçtepe bitmedi`);
     // Tek günde ışınlanmamalı: yol gerçekten günlere yayılmalı.
     assert.ok(gun >= 3, `yürüyüş ${gun} günde bitti — çok hızlı`);
+  });
+});
+
+describe('çıkarma', () => {
+  /**
+   * Hedefe üç birlik bindirip bir tur çevirir; kaybı ve raporu döndürür.
+   * Deniz desteği her çağrıda aynı kaldığı için tahkimat karşılaştırması
+   * geçerli olur.
+   */
+  function cikar(fortLevel: number) {
+    const s = newGame('entente', 99);
+    const hedef = 'seddulbahir';
+    const def = Object.values(s.landUnits).find(
+      (u) => u.side === 'ottoman' && !u.embarkedIn,
+    )!;
+    def.location = hedef;
+    def.entrenchment = 4;
+    s.provinces[hedef]!.fortLevel = fortLevel;
+    s.provinces[hedef]!.controller = 'ottoman';
+
+    const filo = Object.values(s.fleets).find((f) => f.side === 'entente')!;
+    const binen = Object.values(s.landUnits)
+      .filter((u) => u.side === 'entente')
+      .slice(0, 3);
+    for (const u of binen) {
+      u.embarkedIn = filo.id;
+      u.location = filo.location;
+      u.order = { kind: 'cikarma', target: hedef, path: [] };
+      filo.embarked.push(u.id);
+    }
+    const once = binen.map((u) => u.strength);
+    endTurn(s);
+    const rapor = s.reports.find((r) => r.title.includes('çıkarma'));
+    const kayip = binen.reduce((n, u, i) => n + (once[i]! - u.strength), 0);
+    return { s, rapor, kayip, binen };
+  }
+
+  it('sahile sığmayan birlik gemide kalır, ertesi gün ikinci dalga olur', () => {
+    // Eskiden bütün ordu tek günde karaya yığılabiliyordu; köprübaşı
+    // sorunu — Gelibolu'nun da Normandiya'nın da şeklini veren sorun —
+    // oyunda hiç yoktu.
+    const { rapor, binen } = cikar(0);
+    assert.ok(rapor, 'çıkarma raporu yok');
+    const karada = binen.filter((u) => !u.embarkedIn);
+    const gemide = binen.filter((u) => u.embarkedIn);
+    assert.ok(karada.length >= 1, 'hiç birlik karaya çıkmadı');
+    assert.ok(gemide.length >= 1, 'üç tümenin üçü de dar koya tek günde sığdı');
+    assert.ok(
+      rapor!.lines.some((l) => l.includes('sığmadı')),
+      'ikinci dalga oyuncuya söylenmiyor',
+    );
+    // Gemide kalan emrini korumalı, yoksa ikinci dalga hiç gelmez.
+    assert.equal(gemide[0]!.order?.kind, 'cikarma');
+  });
+
+  it('sahil tahkimatı çıkarma kaybını artırır ve 2. seviyede doymaz', () => {
+    // Kayıp tavanı sabit %40 iken 2. seviye tahkimat tavanı doyuruyordu:
+    // betonarme sahil ile tel örgülü sahil aynı kayıbı veriyordu.
+    const a = cikar(0).kayip;
+    const b = cikar(2).kayip;
+    const c = cikar(4).kayip;
+    assert.ok(b > a * 1.2, `tahkimat 2 (${b}) tahkimatsızdan (${a}) belirgin fazla değil`);
+    assert.ok(c > b * 1.2, `tahkimat 4 (${c}) tahkimat 2'den (${b}) belirgin fazla değil`);
+  });
+
+  it('köprübaşı ayağının altındaki ile taarruz edebilir', () => {
+    // Hata: taarruz hedefi yalnız KOMŞU il olabiliyordu. Karaya çıkan
+    // birlik düşmanla AYNI ilin içindedir; emri ne oyuncu verebiliyor
+    // ne de yapay zekâ. Köprübaşı kumsalda sonsuza kadar oturuyordu —
+    // Pasifik'te 150 turda 293 çıkarma yapılıyor, tek ada alınmıyordu.
+    const s = newGame('entente', 5);
+    const il = 'seddulbahir';
+    const def = Object.values(s.landUnits).find(
+      (u) => u.side === 'ottoman' && !u.embarkedIn,
+    )!;
+    def.location = il;
+    const atk = Object.values(s.landUnits).find((u) => u.side === 'entente')!;
+    atk.embarkedIn = null;
+    atk.location = il;
+    s.provinces[il]!.controller = 'ottoman';
+
+    // Emir kabul edilmeli.
+    const hata = issueLandOrder(s, atk.id, 'taarruz', il);
+    assert.equal(hata, null, `emir reddedildi: ${hata}`);
+
+    endTurn(s);
+    const rapor = s.reports.find(
+      (r) => r.province === il && r.title.includes('muharebe'),
+    );
+    assert.ok(rapor, 'köprübaşı taarruzu hiç çözülmedi');
   });
 });
 

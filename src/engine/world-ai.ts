@@ -111,14 +111,21 @@ export function planWorldAi(state: GameState, rng: Rng, forSide?: Side): void {
     return v;
   };
 
+  // Amfibi harekât ÖNCE: karaya çıkacak birlik normal cephe planına
+  // girmemeli, yoksa her tur siperlen emriyle ezilir.
+  const amphib = planAmphibious(state, ai, enemy, front);
+
   for (const u of Object.values(state.landUnits)) {
     if (u.side !== ai || u.strength <= 0 || u.embarkedIn) continue;
+    if (amphib.has(u.id)) continue;
     planUnit(state, u, ai, enemy, front, atk, def, rng);
   }
 
   // Donanma: kendi kıyı sularında devriye, düşman kıyısını abluka altına al.
   for (const f of Object.values(state.fleets)) {
     if (f.side !== ai || liveShips(f).length === 0) continue;
+    // Çıkarma görevindeki filo devriyeye yazılmaz.
+    if (f.embarked.length > 0 || amphib.has(f.id)) continue;
     if (f.order && f.order.path.length > 0) continue;
     const here = prov(f.location);
     const hostileCoast = here.neighbours.find((n) => {
@@ -142,6 +149,160 @@ export function planWorldAi(state: GameState, rng: Rng, forSide?: Side): void {
   }
 }
 
+/** Bir filonun aynı anda taşıyabileceği tümen sayısı. */
+const LIFT_PER_FLEET = 3;
+
+/**
+ * Amfibi harekât — dünya haritasının eksik yarısı.
+ *
+ * Dünya yapay zekâsı yalnız yürüyor ve bitişik ile taarruz ediyordu:
+ * denizin ötesindeki hiçbir toprak ASLA el değiştiremezdi. Ölçüm —
+ * Pasifik'te 51 ada ili, 150 tur, sıfır çıkarma, el değiştiren ada yok.
+ * Pasifik Savaşı oynanmıyordu; iki taraf da adalarında oturuyordu.
+ *
+ * Hedef seçimi kasten dar: yalnız KARADAN SALDIRILAMAYAN düşman kıyı
+ * illeri. Karadan gidilebilen yere gemiyle gidilmez.
+ *
+ * Döndürdüğü küme, normal cephe planının dokunmaması gereken birlik ve
+ * filo kimlikleridir.
+ */
+function planAmphibious(
+  state: GameState,
+  ai: Side,
+  enemy: Side,
+  front: Frontline,
+): Set<string> {
+  const busy = new Set<string>();
+
+  // ── Hedefler: karadan erişilemeyen düşman kıyısı ──────────────────
+  //
+  // Sıralama önemli: "en yakın hedef" kuralıyla yapay zekâ bütün
+  // çıkarmalarını anakaranın aynı üç kıyı iline yapıyor, aynı mezbahaya
+  // tekrar tekrar giriyor ve haritadaki 51 adanın hiçbirine ayak
+  // basmıyordu. Önce ADA, sonra ZAYIF SAVUNULAN hedef.
+  type Target = { id: ProvinceId; island: boolean; defence: number };
+  const ranked: Target[] = [];
+  for (const p of provinces()) {
+    if (p.isSea) continue;
+    if (state.provinces[p.id]?.controller !== enemy) continue;
+    let coastal = false;
+    let landAttackable = false;
+    let island = true;
+    for (const n of p.neighbours) {
+      if (prov(n).isSea) coastal = true;
+      else {
+        island = false;
+        if (state.provinces[n]?.controller === ai) landAttackable = true;
+      }
+    }
+    if (!coastal || landAttackable) continue;
+    ranked.push({ id: p.id, island, defence: stackDefence(state, p.id, enemy) });
+  }
+  if (ranked.length === 0) return busy;
+  ranked.sort(
+    (a, b) => Number(b.island) - Number(a.island) || a.defence - b.defence,
+  );
+  // Bir filonun karaya çıkarabileceğinden çok daha güçlü savunulan yere
+  // çıkarma yapılmaz; 840 çıkarmanın büyük kısmı böyle boşa gidiyordu.
+  const reachable = ranked.filter((t) => t.defence < 900);
+  const shortlist = (reachable.length > 0 ? reachable : ranked).slice(0, 24);
+  const targets = new Set(shortlist.map((t) => t.id));
+
+  // Hedefe bitişik denizler: filonun gitmesi gereken yerler.
+  const assaultWater = new Set<ProvinceId>();
+  for (const t of targets) {
+    for (const n of prov(t).neighbours) if (prov(n).isSea) assaultWater.add(n);
+  }
+
+  for (const f of Object.values(state.fleets)) {
+    if (f.side !== ai || liveShips(f).length === 0) continue;
+
+    // ── Yüklü filo ────────────────────────────────────────────────
+    if (f.embarked.length > 0) {
+      busy.add(f.id);
+      const beach = prov(f.location).neighbours.find((n) => targets.has(n));
+      if (beach) {
+        for (const id of f.embarked) {
+          const u = state.landUnits[id];
+          if (!u) continue;
+          u.order = { kind: 'cikarma', target: beach, path: [] };
+          busy.add(u.id);
+        }
+        f.order = { kind: 'cikarma_destek', target: beach, path: [] };
+        continue;
+      }
+      for (const id of f.embarked) busy.add(id);
+      const water = nearestIn(f.location, assaultWater);
+      const path = water ? findPath(f.location, water, (id) => prov(id).isSea, undefined, 4000) : null;
+      f.order = path
+        ? { kind: 'seyret', target: water!, path }
+        : { kind: 'demirle', target: null, path: [] };
+      continue;
+    }
+
+    // ── Boş filo: cephede işi olmayan birlik topla ────────────────
+    // Cepheye kara yolu OLMAYAN birlik aranır: ada garnizonu ya da
+    // denizin yanlış tarafında kalmış tümen. Cephedeki tümen gemiye
+    // bindirilirse hat boşalır.
+    const pickup: LandUnit[] = [];
+    for (const n of prov(f.location).neighbours) {
+      if (prov(n).isSea) continue;
+      if (state.provinces[n]?.controller !== ai) continue;
+      for (const u of Object.values(state.landUnits)) {
+        if (u.side !== ai || u.embarkedIn || u.strength <= 0) continue;
+        if (u.location !== n) continue;
+        if (front.distance.get(u.location) !== undefined) continue;
+        pickup.push(u);
+        if (pickup.length >= LIFT_PER_FLEET) break;
+      }
+      if (pickup.length >= LIFT_PER_FLEET) break;
+    }
+    if (pickup.length > 0) {
+      busy.add(f.id);
+      for (const u of pickup) {
+        u.embarkedIn = f.id;
+        u.order = null;
+        busy.add(u.id);
+        if (!f.embarked.includes(u.id)) f.embarked.push(u.id);
+      }
+      f.order = { kind: 'demirle', target: null, path: [] };
+      continue;
+    }
+
+    // Yükleyecek birlik yok: bindirme yapılabilecek en yakın kıyıya git.
+    const boardable = new Set<ProvinceId>();
+    for (const u of Object.values(state.landUnits)) {
+      if (u.side !== ai || u.embarkedIn || u.strength <= 0) continue;
+      if (front.distance.get(u.location) !== undefined) continue;
+      for (const n of prov(u.location).neighbours) if (prov(n).isSea) boardable.add(n);
+    }
+    if (boardable.size === 0) continue;
+    const water = nearestIn(f.location, boardable);
+    if (!water || water === f.location) continue;
+    const path = findPath(f.location, water, (id) => prov(id).isSea, undefined, 4000);
+    if (!path) continue;
+    busy.add(f.id);
+    f.order = { kind: 'seyret', target: water, path };
+  }
+
+  return busy;
+}
+
+/** Deniz üzerinden en yakın hedef deniz ili — sınırlı genişlikte BFS. */
+function nearestIn(from: ProvinceId, goals: ReadonlySet<ProvinceId>): ProvinceId | null {
+  if (goals.has(from)) return from;
+  const seen = new Set<ProvinceId>([from]);
+  const queue: ProvinceId[] = [from];
+  for (let head = 0; head < queue.length && head < 2000; head++) {
+    for (const nb of prov(queue[head]!).neighbours) {
+      if (seen.has(nb)) continue;
+      seen.add(nb);
+      if (goals.has(nb)) return nb;
+      if (prov(nb).isSea) queue.push(nb);
+    }
+  }
+  return null;
+}
 function planUnit(
   state: GameState,
   u: LandUnit,
@@ -154,6 +315,14 @@ function planUnit(
 ): void {
   const here = prov(u.location);
   const healthy = u.organisation > u.maxOrganisation * 0.5 && u.supplied > 0.45;
+
+  // 0) Köprübaşındaysak önce ayağımızın altındaki ili alalım. Karaya
+  //    çıkan birlik düşmanla AYNI ilin içindedir; komşuya bakan normal
+  //    plan onu görmez ve birlik kumsalda sonsuza kadar oturur.
+  if (state.provinces[u.location]?.controller === enemy) {
+    u.order = { kind: 'taarruz', target: u.location, path: [] };
+    return;
+  }
 
   // 1) Komşuda ele geçirilebilir düşman ili var mı?
   let best: ProvinceId | null = null;

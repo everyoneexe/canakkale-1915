@@ -31,10 +31,18 @@ export function landOrderOptions(
   u: LandUnit,
 ): readonly OrderOption<LandOrderKind>[] {
   const here = prov(u.location);
-  const enemyAdjacent = here.neighbours.some((n) => {
-    const st = state.provinces[n];
-    return !prov(n).isSea && st?.controller && st.controller !== u.side;
-  });
+  // Düşman KOMŞUDA ya da ayağımızın ALTINDA olabilir: karaya çıkan
+  // birlik düşmanla aynı ilin içindedir. Yalnız komşuya bakılırsa
+  // oyuncunun köprübaşı taarruz emri hiç açılmaz.
+  const onEnemySoil = state.provinces[u.location]?.controller
+    ? state.provinces[u.location]!.controller !== u.side
+    : false;
+  const enemyAdjacent =
+    onEnemySoil ||
+    here.neighbours.some((n) => {
+      const st = state.provinces[n];
+      return !prov(n).isSea && st?.controller && st.controller !== u.side;
+    });
   const embarked = u.embarkedIn !== null && u.embarkedIn !== 'bekleme';
   const fresh = u.organisation > u.maxOrganisation * 0.3;
 
@@ -190,7 +198,9 @@ export function issueLandOrder(
   }
   if (kind === 'taarruz') {
     if (!target) return 'Hedef il seçilmedi.';
-    if (!prov(u.location).neighbours.includes(target)) return 'Hedef komşu değil.';
+    if (target !== u.location && !prov(u.location).neighbours.includes(target)) {
+      return 'Hedef ne komşu ne de birliğin bulunduğu il.';
+    }
     if (state.provinces[target]?.controller === u.side) return 'Burası zaten bizim.';
     u.order = { kind, target, path: [] };
     return null;
