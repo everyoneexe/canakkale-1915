@@ -12,18 +12,26 @@ dist/
 *.webm
 
 # ── Harita derleme önbelleği ──────────────────────────────────────────────
-# tools/fetch_terrain.py ve geocode*.py bunları yeniden üretir.
+# Hepsi TÜRETİLMİŞ veri: fetch_terrain.py / fetch_world_terrain.py /
+# geocode*.py yeniden üretir. Bir kez yanlışlıkla commit edildiler ve
+# depoyu 230 MB'a çıkardılar (1.538 ham karo, dört yükseklik ızgarası);
+# geçmiş temizlendi, depo 27 MB'a indi.
 tools/data/tiles/
-# Yükseklik ızgaraları: fetch_terrain.py ile ~25 saniyede yeniden iner,
-# depoda tutmanın anlamı yok (üçü birden 44 MB).
+tools/world/data/tiles/
+# Yükseklik ızgaraları: ~25 saniyede yeniden iniyor, üçü birden 44 MB.
 tools/data/elev*.npz
+tools/world/data/*.npz
 tools/data/*.html
 tools/data/*.txt
 tools/data/*.pdf
 tools/data/coastline.json
+__pycache__/
+*.pyc
 
-# Üretilmiş harita çıktıları (src/data/map.json, public/relief.png) depoda
-# TUTULUR: derleme zinciri ~400 MB indirme gerektiriyor, oysa çıktı 900 KB.
+# Üretilmiş harita çıktıları (src/data/map*.json, public/relief*.png) depoda
+# TUTULUR: derleme zinciri yüzlerce MB indirme gerektiriyor, oysa çıktı
+# birkaç yüz KB. Doğal Earth geojson'ları da kalır — onları indiren betik
+# yok, elle indirilmiş kaynak girdi.
 
 *.log
 .DS_Store
