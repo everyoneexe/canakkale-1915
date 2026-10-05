@@ -1340,7 +1340,19 @@ export class MapView {
     };
     for (const u of Object.values(s.landUnits)) {
       if (u.side !== s.playerSide || !u.order) continue;
-      if (u.order.kind === 'yuru') drawPath(u.location, u.order.path, C.accent);
+      if (u.order.kind === 'yuru') {
+        drawPath(u.location, u.order.path, C.accent);
+        // Çok günlük yürüyüşte sayaç günlerce yerinde kalıyor; yolun
+        // üstündeki işaret birliğin fiilen ilerlediğini gösterir.
+        if (u.marchingTo && u.moveProgress > 0.02) {
+          const a = prov(u.location).center;
+          const b = prov(u.marchingTo).center;
+          const t = Math.min(1, u.moveProgress);
+          this.gPaths
+            .circle(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, w * 2.2)
+            .fill({ color: C.accentGlow, alpha: 0.95 });
+        }
+      }
       if (u.order.kind === 'taarruz' && u.order.target) {
         drawPath(u.location, [u.order.target], C.mine);
       }

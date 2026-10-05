@@ -354,6 +354,8 @@ class Game {
 
   private hover(sel: Selection | null, screen: { x: number; y: number }): void {
     const tip = $('ipucu');
+    // Fare ipucu olarak kullanılıyor: bildirim işaretini kaldır.
+    tip.classList.remove('bildirim');
     if (!sel) {
       tip.hidden = true;
       return;
@@ -413,6 +415,26 @@ class Game {
       } else if (p.order === 'cikarma') {
         const f = u.embarkedIn ? s.fleets[u.embarkedIn] : null;
         if (f) for (const n of prov(f.location).neighbours) if (!prov(n).isSea) out.add(n);
+      } else if (p.order === 'yuru') {
+        // Yürüyüş yalnız DOST ya da BOŞ karadan geçer. Eskiden bütün kara
+        // illeri hedef olarak işaretleniyordu; oyuncu ulaşılamayan bir ile
+        // basıyor, emir sessizce reddediliyor ve "ordu harekete geçmiyor"
+        // görünüyordu. Erişilemeyen il artık hiç işaretlenmez.
+        const gecilir = (id: ProvinceId): boolean => {
+          const st = s.provinces[id];
+          return !prov(id).isSea && (st?.controller === u.side || st?.controller == null);
+        };
+        // Birliğin bulunduğu ilden yayılan dost kara bölgesi.
+        const kuyruk: ProvinceId[] = [u.location];
+        const gorulen = new Set<ProvinceId>([u.location]);
+        for (let i = 0; i < kuyruk.length; i++) {
+          for (const n of prov(kuyruk[i]!).neighbours) {
+            if (gorulen.has(n) || !gecilir(n)) continue;
+            gorulen.add(n);
+            kuyruk.push(n);
+            out.add(n);
+          }
+        }
       } else {
         for (const q of provinces()) if (!q.isSea) out.add(q.id);
       }
@@ -449,15 +471,25 @@ class Game {
     this.view.draw();
   }
 
+  /**
+   * Kısa bildirim — reddedilen emir, uyarı.
+   *
+   * `#ipucu` kutusunu fare ipucuyla PAYLAŞIR, ama dokunmatik cihazda fare
+   * ipucu gizleniyor (`@media (hover: none)`). İşaret sınıfı olmadan
+   * telefonda "Dost topraklardan hedefe yol yok" gibi uyarılar hiç
+   * görünmüyor, oyuncu emri verip hiçbir şey olmadığını sanıyordu.
+   */
   private toast(msg: string): void {
     const tip = $('ipucu');
+    tip.classList.add('bildirim');
     tip.innerHTML = `<b>${esc(msg)}</b>`;
     tip.hidden = false;
     tip.style.left = '50%';
     tip.style.top = '84px';
     window.setTimeout(() => {
       tip.hidden = true;
-    }, 2200);
+      tip.classList.remove('bildirim');
+    }, 2600);
   }
 
   // ─────────────────────────────────────────────────────────── tur ──

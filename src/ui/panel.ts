@@ -299,6 +299,16 @@ export class Panel {
           u.order.target ? ` → ${esc(prov(u.order.target).name)}` : ''
         }${u.order.path.length > 0 ? ` (${u.order.path.length} il)` : ''}</p>`;
       }
+      // Yürüyüş ÇOK GÜNLÜK olabilir: uzun bir adımda birlik günlerce
+      // yerinde görünür. İlerleme hiçbir yerde yazmadığı için oyuncu
+      // emrin işlemediğini sanıyordu — "ordu harekete geçmiyor".
+      if (u.order?.kind === 'yuru' && u.marchingTo) {
+        const yuzde = Math.round(u.moveProgress * 100);
+        html += `
+          <div class="satir"><span>Yürüyor → ${esc(prov(u.marchingTo).name)}</span>
+            <span>%${yuzde}</span></div>
+          ${bar(u.moveProgress, 1, 'yesil')}`;
+      }
       html += `</div>`;
     }
 
