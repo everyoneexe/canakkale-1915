@@ -140,10 +140,11 @@ function cmd(
 export const COMMANDERS: readonly CommanderSpec[] = [
   // ══ OSMANLI / ALMAN ═══════════════════════════════════════════════════
   cmd(
-    'cevat_pasa', 'Cevat Paşa (Çobanlı)', 'Albay', 'osmanli', 'ottoman', 'deniz',
-    [3, 6, 6, 4], ['sahil_savunmasi', 'mayin_harbi'], '1914-08-09',
-    'Çanakkale Müstahkem Mevki Komutanı, 9 Ağustos 1914\'ten itibaren. ' +
-    '18 Mart\'ta uygulanan boğaz savunma planının asıl yazarı.',
+    'cevat_pasa', 'Cevat Paşa (Çobanlı)', 'Mirliva', 'osmanli', 'ottoman', 'deniz',
+    [3, 6, 6, 4], ['sahil_savunmasi', 'mayin_harbi'], '1914-08-10',
+    'Çanakkale Müstahkem Mevki Komutanı, 10 Ağustos 1914\'ten itibaren; ' +
+    '29 Kasım 1914\'te mirliva rütbesine terfi edip paşa oldu. 18 Mart\'ta ' +
+    'uygulanan boğaz savunma planının asıl yazarı.',
     'Nykiel onu "savunma planının gerçek yazarı" diye niteler: ağır tabyaları ' +
     'yıpratma, asıl işi mayın hatlarına ve hareketli obüslere yaptırma fikri ' +
     'onundur. Savunma ve planlama 6; taarruz tecrübesi yok, 3.',
@@ -275,10 +276,16 @@ export const COMMANDERS: readonly CommanderSpec[] = [
     'Siyasi baskıyla taarruz dayatır: taarruz 5, savunma/planlama 2.',
     COMU,
   ),
+  // Devir tarihi Cevat Paşa'nın ayrılışına dayandırıldı: kaynaklar onun
+  // 9 Ekim 1915'te 14. Kolordu'ya gittiğinde birleşiyor. Nihat Paşa'nın
+  // atama emrinin TAM tarihini doğrulayan birincil kaynağa ulaşılamadı;
+  // dosyada daha önce yazan 3 Ekim, Cevat'ın görevde olduğu güne denk
+  // geldiği için kesin olarak yanlıştı.
   cmd(
     'nihat_pasa', 'Nihat Paşa (Anılmış)', 'Albay', 'osmanli', 'ottoman', 'deniz',
-    [3, 5, 4, 4], ['sahil_savunmasi'], '1915-10-03',
-    '3 Ekim 1915\'te Çanakkale (Akdeniz) Boğazı Müstahkem Mevki Komutanı oldu.',
+    [3, 5, 4, 4], ['sahil_savunmasi'], '1915-10-09',
+    'Cevat Paşa 9 Ekim 1915\'te 14. Kolordu Komutanlığına gidince Çanakkale ' +
+    '(Akdeniz) Boğazı Müstahkem Mevki Komutanlığını devraldı.',
     'Kampanyanın son döneminde savunmayı devraldı. Dengeli savunma puanları.',
     COMU,
   ),
