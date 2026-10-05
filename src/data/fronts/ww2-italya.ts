@@ -36,6 +36,10 @@ export const WW2_ITALYA_PACK: FrontPack = {
     { nation: US, name: 'Anzio Çıkarma Kuvveti', templateId: 'us_piyade_tumen', at: [12.62, 41.45], arrivesOn: '1944-01-22', src: IS },
     { nation: UK, name: 'Polonya II. Kolordusu', templateId: 'pl_piyade_tumen', at: [13.83, 41.47], arrivesOn: '1944-04-01', src: IS },
     { nation: UK, name: 'Fransız Sefer Kolordusu', templateId: 'fr_piyade_tumen', at: [13.60, 41.40], arrivesOn: '1944-01-01', src: IS },
+    { nation: DE, name: '14. Ordu — von Mackensen, Anzio Çemberi', templateId: 'de_ww2_piyade', at: [12.70, 41.60], arrivesOn: '1944-02-01', src: IS },
+    { nation: IT, name: 'Salò Ulusal Cumhuriyetçi Ordusu — Graziani', templateId: 'it_ww2_piyade', at: [10.45, 45.60], arrivesOn: '1944-01-01', src: IS },
+    { nation: 'Brazil', name: 'Brezilya Sefer Kuvveti (FEB)', templateId: 'us_piyade_tumen', at: [10.90, 44.20], arrivesOn: '1944-09-16', src: IS },
+    { nation: US, name: 'ABD IV. Kolordusu — Apenninler', templateId: 'us_zirhli_tumen', at: [11.00, 44.30], arrivesOn: '1944-09-01', src: IS },
   ],
 
   commanders: [
@@ -82,6 +86,88 @@ export const WW2_ITALYA_PACK: FrontPack = {
       'Dört taarruzda alınamayan tepeyi aldı: taarruz 5.',
       IS,
     ),
+    cmd(
+      'it_vietinghoff', 'Heinrich von Vietinghoff', 'Orgeneral', 'alman', 'ottoman', 'kara',
+      [4, 6, 5, 4], ['inatci_savunma', 'temkinli'], '1943-08-22',
+      '10. Ordu Komutanı. Salerno\'da köprübaşını neredeyse denize döktü, ' +
+      'Gustav Hattı\'nı yönetti ve Roma düşerken ordusunu kuzeye sağlam ' +
+      'çıkardı. 1945\'te Kesselring\'in yerine Güney Başkomutanı oldu ve ' +
+      'Caserta teslimini imzalattı.',
+      'Hat savunması ve çekilme yönetimi: savunma 6, taarruz sıradan.',
+      IS,
+    ),
+    cmd(
+      'it_senger', 'Frido von Senger und Etterlin', 'Korgeneral', 'alman', 'ottoman', 'kara',
+      [4, 6, 6, 4], ['inatci_savunma', 'siper_ustasi'], '1943-10-08',
+      'XIV. Panzer Kolordusu Komutanı; Cassino kesimini savundu. ' +
+      'Manastırı askerî amaçla kullanmayı reddetti — bombalandıktan sonra ' +
+      'enkaza yerleşmek serbest kaldı ve savunma kolaylaştı.',
+      'Dar arazide dört taarruzu kıran mevzi düzeni: savunma ve planlama 6.',
+      IS,
+    ),
+    cmd(
+      'it_student', 'Kurt Student', 'Orgeneral', 'alman', 'ottoman', 'kara',
+      [5, 5, 5, 3], ['atilgan_amiral', 'taarruz_ruhu'], '1943-09-08',
+      'Alman paraşüt kuvvetlerinin kurucusu. Achse Harekâtı\'nda Roma ' +
+      'çevresindeki İtalyan birliklerinin silahsızlandırılmasını ve Gran ' +
+      'Sasso baskınıyla Mussolini\'nin kaçırılmasını planladı.',
+      'Baskın ve hava indirme uzmanı, uzun süreli idame zayıf: lojistik 3.',
+      IS, '1943-11-15',
+    ),
+    cmd(
+      'it_badoglio', 'Pietro Badoglio', 'Mareşal', 'italyan', 'entente', 'siyasi',
+      [2, 3, 3, 3], ['temkinli'], '1943-07-25',
+      'Mussolini devrildikten sonra hükümeti kurdu. Bir yandan Almanya\'ya ' +
+      'sadakat sözü verip bir yandan Cassibile\'de ateşkes imzaladı; ' +
+      'ordusuna ne yapacağını söylemeden Roma\'dan kaçtı.',
+      'Siyaseten manevra etti ama ordusunu komutasız bıraktı: hepsi düşük.',
+      IS,
+    ),
+    cmd(
+      'it_mussolini', 'Benito Mussolini', 'Duçe', 'italyan', 'ottoman', 'siyasi',
+      [3, 2, 2, 2], ['israfci'], '1943-07-10',
+      'Faşist diktatör. Sicilya\'nın kaybı üzerine 25 Temmuz\'da Büyük ' +
+      'Faşist Konsey tarafından düşürüldü; Gran Sasso\'dan kaçırıldıktan ' +
+      'sonra kuzeyde Alman himayesindeki Salò Cumhuriyeti\'nin başına geçti.',
+      'Kuklaya dönüşmüş siyasi önder; askerî değeri yok.',
+      IS, '1945-04-28',
+    ),
+    cmd(
+      'it_graziani', 'Rodolfo Graziani', 'Mareşal', 'italyan', 'ottoman', 'kara',
+      [3, 3, 2, 2], ['agir_kanli', 'israfci'], '1943-09-23',
+      'Salò Cumhuriyeti Savunma Bakanı. Toplanan tümenlerin çoğu firar ve ' +
+      'partizan baskısıyla eridi; birlikler cepheden çok iç güvenlikte ' +
+      'kullanıldı.',
+      'Güvenilmez, moralsiz bir orduyu yönetti: tüm puanlar düşük.',
+      IS,
+    ),
+    cmd(
+      'it_montgomery', 'Bernard Montgomery', 'Orgeneral', 'ingiliz', 'entente', 'kara',
+      [5, 6, 6, 6], ['temkinli', 'lojistikci'], '1943-07-10',
+      '8. Ordu Komutanı. Sicilya\'da doğu kıyısından Etna eteklerine ' +
+      'tırmandı, sonra Calabria\'ya geçti. Aralık 1943\'te Overlord için ' +
+      'İngiltere\'ye çağrıldı.',
+      'Hazırlık ve ikmalde titiz, dağda yavaş: lojistik 6, taarruz 5.',
+      IS, '1943-12-31',
+    ),
+    cmd(
+      'it_truscott', 'Lucian Truscott', 'Korgeneral', 'amerikan', 'entente', 'kara',
+      [6, 5, 5, 5], ['taarruz_ruhu', 'atilgan_amiral'], '1944-02-22',
+      'Anzio\'da VI. Kolordu Komutanı. Çemberden çıkışta kuvveti ' +
+      'Valmontone\'ye sürüp Alman 10. Ordusunu kesmek istedi; Clark\'ın ' +
+      'emriyle yön Roma\'ya çevrildi.',
+      'Sahada en keskin Amerikan kolordu komutanı: taarruz 6.',
+      IS,
+    ),
+    cmd(
+      'it_juin', 'Alphonse Juin', 'Orgeneral', 'fransiz', 'entente', 'kara',
+      [6, 5, 6, 4], ['taarruz_ruhu', 'agir_kanli'], '1943-11-25',
+      'Fransız Sefer Kolordusu Komutanı. Mayıs 1944\'te Garigliano\'nun ' +
+      'güneyinde geçilmez sayılan Aurunci dağlarını Faslı dağ birlikleriyle ' +
+      'aştı ve Gustav Hattı\'nın yan kilidini açtı.',
+      'Araziyi engel değil imkân gören tek komutan: taarruz ve planlama 6.',
+      IS,
+    ),
   ],
 
   events: [
@@ -108,6 +194,34 @@ export const WW2_ITALYA_PACK: FrontPack = {
       src: IS,
     },
     {
+      id: 'wi_messina',
+      date: '1943-08-17',
+      title: 'Messina Tahliyesi — Kaçırılan Fırsat',
+      body:
+        'Lehrbuch Harekâtı ile Mihver, boğazın iki yakasına yığdığı uçaksavar ' +
+        'bataryalarının koruması altında 100.000\'in üzerinde asker, on ' +
+        'binlerce araç ve topunu anakaraya geçirdi. Müttefik donanma ve ' +
+        'hava kuvvetleri geçişi kesmek için ciddi bir girişimde bulunmadı: ' +
+        'ada alındı ama onu savunan ordu kurtuldu ve aynı ordu bir ay sonra ' +
+        'Salerno\'da karşılarına çıktı.',
+      kind: 'deniz',
+      src: IS,
+    },
+    {
+      id: 'wi_cassibile_achse',
+      date: '1943-09-08',
+      title: 'Cassibile Ateşkesi ve Achse Harekâtı',
+      body:
+        'İtalya\'nın 3 Eylül\'de gizlice imzaladığı ateşkes 8 Eylül akşamı ' +
+        'ilan edildi. Almanlar aynı gece hazır bekledikleri Achse planını ' +
+        'uyguladı: İtalyan birlikleri emir alamadan silahsızlandırıldı, ' +
+        'yarımadanın kuzeyi ve ortası bir gecede Alman işgaline girdi. ' +
+        'Müttefikler bir ortak kazanacaklarını sanırken karşılarına ' +
+        'baştan sona Alman savunması çıktı.',
+      kind: 'siyasi',
+      src: IS,
+    },
+    {
       id: 'wi_salerno',
       date: '1943-09-09',
       title: 'Salerno — Anakaraya Çıkış',
@@ -115,6 +229,36 @@ export const WW2_ITALYA_PACK: FrontPack = {
         'İtalya\'nın teslim olduğu ilan edildiği gün 5. Ordu Salerno\'ya ' +
         'çıktı. Alman karşı taarruzu köprübaşını denize dökmeye yaklaştı; ' +
         'donanma ateşi ve hava desteği çıkarmayı kurtardı.',
+      kind: 'kara',
+      src: IS,
+    },
+    {
+      id: 'wi_napoli',
+      date: '1943-10-01',
+      title: 'Napoli\'nin Dört Günü',
+      body:
+        '27-30 Eylül\'de Napolililer Müttefikler gelmeden Alman garnizonuna ' +
+        'karşı ayaklandı; şehir 1 Ekim\'de 5. Ordu\'ya açık teslim edildi. ' +
+        'Almanlar çekilirken limanı sistemli biçimde yıktı ve gecikmeli ' +
+        'mayınlar bıraktı — liman kapasitesi haftalarca sınırlı kaldı, ' +
+        'bu da yarımadadaki ilerleyişin hızını ikmalin belirlediğini ' +
+        'gösterdi.',
+      kind: 'ikmal',
+      src: IS,
+    },
+    {
+      id: 'wi_cografya',
+      date: '1943-10-12',
+      title: 'Volturno — "Yumuşak Karın" Masalı Bitti',
+      body:
+        'Volturno geçişi Müttefiklere asıl dersi verdi: İtalya\'nın ' +
+        'coğrafyası savunana çalışır. Apenninler yarımadayı boydan boya ' +
+        'ikiye böler, dağ sıraları ve nehirler enlemesine uzanıp arka ' +
+        'arkaya hazır savunma hattı sunar. Oyunda bu arazi hareket ' +
+        'maliyetiyle ve cephe genişliğiyle karşılanır: dağda cephe ' +
+        'genişliği 18, ovada 44 — dar cephede sayı üstünlüğü işe yaramaz, ' +
+        'fazla tümeni muharebeye sokamazsın. Churchill\'in benzetmesi ' +
+        'yanıldı; sefer yirmi ay sürdü.',
       kind: 'kara',
       src: IS,
     },
@@ -141,6 +285,33 @@ export const WW2_ITALYA_PACK: FrontPack = {
       src: IS,
     },
     {
+      id: 'wi_manastir',
+      date: '1944-02-15',
+      title: 'Monte Cassino Manastırının Bombalanması',
+      body:
+        'Yüzlerce ağır bombardıman uçağı 1.400 yıllık manastırı yıktı. ' +
+        'Alman birlikleri binayı kullanmıyordu — bombardımandan sonra ' +
+        'enkaza yerleşmekte serbest kaldılar ve moloz yığını betondan ' +
+        'daha iyi bir mevzi oldu. Yıkım ne hattı açtı ne de taarruzu ' +
+        'kolaylaştırdı; manastır üç ay daha tutuldu.',
+      kind: 'hava',
+      src: IS,
+    },
+    {
+      id: 'wi_diadem',
+      date: '1944-05-11',
+      title: 'Diadem Harekâtı',
+      body:
+        'Alexander kuvvetlerini gizlice batıya kaydırıp Gustav Hattı\'na ' +
+        'dar bir cephede toplu darbe vurdu. Belirleyici hamle Juin\'in ' +
+        'Fransız Sefer Kolordusu\'ndan geldi: Faslı dağ birlikleri ' +
+        'Almanların geçilmez saydığı Aurunci dağlarını aşıp hattı yandan ' +
+        'çökertti. Ders basit — dağ bir duvar değil, sadece yolu olmayan ' +
+        'bir geçit.',
+      kind: 'kara',
+      src: IS,
+    },
+    {
       id: 'wi_cassino',
       date: '1944-05-18',
       title: 'Monte Cassino Alındı',
@@ -159,6 +330,44 @@ export const WW2_ITALYA_PACK: FrontPack = {
         'Çekilen Alman 10. Ordusunu kesme fırsatının kaçırıldığı hâlâ ' +
         'tartışılır; o ordu Gotik Hattı\'nda yeniden kuruldu.',
       kind: 'kara',
+      src: IS,
+    },
+    {
+      id: 'wi_gotik',
+      date: '1944-08-25',
+      title: 'Gotik Hattı — Olive Harekâtı',
+      body:
+        'Kesselring Apenninlerin kuzey eteklerinde yeni bir hat kurdu. ' +
+        'Müttefikler Adriyatik kıyısından yüklendi, Rimini\'yi aldı ama ' +
+        'sonbahar yağmurları Po ovasına inen vadileri çamura çevirdi ve ' +
+        'harekât durdu. Fransa\'ya yedi tümen ayrıldığı için İtalya cephesi ' +
+        'kış boyunca ikincil cephe olarak bekledi.',
+      kind: 'kara',
+      src: IS,
+    },
+    {
+      id: 'wi_grapeshot',
+      date: '1945-04-09',
+      title: 'Nisan Taarruzu — Po Ovasına Çıkış',
+      body:
+        'Grapeshot Harekâtı başladı: 8. Ordu Argenta boğazından, 5. Ordu ' +
+        'Bologna\'nın batısından yüklendi. Hat kırılınca dar vadi ' +
+        'savunmasının anlamı kalmadı; Po ovasında cephe birden genişledi ' +
+        've Müttefik zırhı üç haftada yarımadanın kuzeyini kat etti. ' +
+        'Aynı ordu, aynı arazi değil — fark buydu.',
+      kind: 'kara',
+      src: IS,
+    },
+    {
+      id: 'wi_caserta',
+      date: '1945-04-29',
+      title: 'Caserta Teslim Belgesi',
+      body:
+        'Vietinghoff\'un temsilcileri Caserta\'da kayıtsız şartsız teslimi ' +
+        'imzaladı; Mussolini bir gün önce partizanlarca yakalanıp ' +
+        'kurşuna dizilmişti. Belge 2 Mayıs\'ta yürürlüğe girdi — Avrupa\'da ' +
+        'imzalanan ilk büyük Alman teslimi.',
+      kind: 'siyasi',
       src: IS,
     },
     {

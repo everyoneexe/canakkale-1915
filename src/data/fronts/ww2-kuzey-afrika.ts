@@ -17,7 +17,9 @@ const IT = 'Italy';
 const UK = 'United Kingdom';
 const US = 'United States';
 const AU = 'Australia';
-const IN = 'India';
+// 1939 ulus listesinde ayrı bir Hindistan yok; Hint Ordusu birlikleri
+// Britanya kadrosunda sayılır. Ad birliğin kendi adında korunuyor.
+const IN = 'United Kingdom';
 const ZA = 'Union of South Africa';
 
 export const KUZEY_AFRIKA_PACK: FrontPack = {
@@ -92,6 +94,127 @@ export const KUZEY_AFRIKA_PACK: FrontPack = {
       'planlama 2.',
       KA, '1941-02-11',
     ),
+    cmd(
+      'ka_oconnor', 'Richard O\'Connor', 'Korgeneral', 'ingiliz', 'entente', 'kara',
+      [6, 4, 7, 5], ['taarruz_ruhu', 'atilgan_amiral'], '1940-09-13',
+      'Batı Çöl Kuvveti Komutanı ve Pusula Harekâtı\'nın gerçek mimarı. ' +
+      'Beş günlük bir akın olarak planlanan harekâtı iki aylık bir imha ' +
+      'seferine çevirdi. Nisan 1941\'de çölde yolunu şaşırıp Alman ' +
+      'devriyesine esir düştü.',
+      'Kendisinden kat kat kalabalık bir orduyu planlamayla imha etti: ' +
+      'planlama 7. Ünü Rommel\'inkinin gölgesinde kaldı.',
+      KA, '1941-04-07',
+    ),
+    cmd(
+      'ka_cunningham_a', 'Alan Cunningham', 'Korgeneral', 'ingiliz', 'entente', 'kara',
+      [4, 4, 4, 4], ['temkinli'], '1941-09-26',
+      '8. Ordu\'nun ilk komutanı. Haçlı Seferi Harekâtı\'nı başlattı ama ' +
+      'tank kayıpları karşısında çekilmeyi düşününce Auchinleck tarafından ' +
+      'harekâtın ortasında görevden alındı.',
+      'Harekâtı başlattı, sinirini koruyamadı: her alanda 4.',
+      KA, '1941-11-26',
+    ),
+    cmd(
+      'ka_ritchie', 'Neil Ritchie', 'Korgeneral', 'ingiliz', 'entente', 'kara',
+      [4, 3, 3, 4], ['israfci'], '1941-11-26',
+      '8. Ordu Komutanı. Gazala\'da zırhlı tümenlerini parça parça ' +
+      'muharebeye soktu; Tobruk\'un düşüşünden sonra görevden alındı.',
+      'Kuvvetini topluca kullanamadı, Rommel tek tek ezdi: planlama 3.',
+      KA, '1942-06-25',
+    ),
+    cmd(
+      'ka_alexander', 'Harold Alexander', 'Orgeneral', 'ingiliz', 'entente', 'kara',
+      [5, 5, 6, 6], ['agir_kanli', 'lojistikci'], '1942-08-15',
+      'Orta Doğu Başkomutanı. Montgomery\'ye siyasi baskıya karşı zaman ' +
+      'kazandırdı; sonra Tunus\'ta doğu ve batıdan gelen iki orduyu tek ' +
+      '18. Ordu Grubu altında birleştirdi.',
+      'Kendi taarruzunu yönetmedi, başkalarının taarruzunu mümkün kıldı: ' +
+      'planlama ve lojistik 6.',
+      KA,
+    ),
+    cmd(
+      'ka_cunningham_abc', 'Andrew Cunningham', 'Oramiral', 'ingiliz', 'entente', 'deniz',
+      [5, 5, 5, 6], ['atilgan_amiral', 'lojistikci'], '1940-09-13',
+      'Akdeniz Filosu Komutanı. Mihver\'in Libya\'ya giden ikmal ' +
+      'konvoylarını boğdu, Malta\'yı ayakta tuttu, Meşale çıkarmasının ' +
+      'deniz kolunu yönetti.',
+      'Çöldeki muharebeyi karada değil denizde belirledi: lojistik 6.',
+      KA,
+    ),
+    cmd(
+      'ka_nehring', 'Walther Nehring', 'Korgeneral', 'alman', 'ottoman', 'kara',
+      [5, 5, 4, 3], ['taarruz_ruhu'], '1942-03-09',
+      'Alman Afrika Kolordusu Komutanı. Gazala ve Tobruk\'ta kolorduyu ' +
+      'yönetti, Alam el Halfa\'da hava saldırısında ağır yaralandı. ' +
+      'Kasım 1942\'de Tunus köprübaşını kuran ilk komutan oldu.',
+      'İyi bir kolordu komutanı, ikmal sorununa çaresiz: lojistik 3.',
+      KA, '1942-08-31',
+    ),
+    cmd(
+      'ka_bayerlein', 'Fritz Bayerlein', 'Tümgeneral', 'alman', 'ottoman', 'kara',
+      [5, 5, 6, 4], ['lojistikci'], '1941-10-01',
+      'Panzerarmee Afrika Kurmay Başkanı. Rommel\'in hasta veya cephede ' +
+      'olmadığı günlerde orduyu fiilen o yönetti; Mareth\'te 1. İtalyan ' +
+      'Ordusu\'nun kurmay işini üstlendi.',
+      'Rommel\'in atılganlığını düzene sokan kurmay: planlama 6.',
+      KA,
+    ),
+    cmd(
+      'ka_arnim', 'Hans-Jürgen von Arnim', 'Orgeneral', 'alman', 'ottoman', 'kara',
+      [4, 5, 4, 3], ['inatci_savunma'], '1942-12-03',
+      '5. Panzer Ordusu ve ardından Afrika Ordu Grubu Komutanı. ' +
+      'Rommel ile hiç anlaşamadı; Tunus köprübaşını altı ay savundu ve ' +
+      '13 Mayıs 1943\'te teslim oldu.',
+      'Savunması sağlamdı ama deniz ikmali kesik bir köprübaşını ' +
+      'kurtaracak savunma yoktur: lojistik 3.',
+      KA,
+    ),
+    cmd(
+      'ka_bastico', 'Ettore Bastico', 'Mareşal', 'italyan', 'ottoman', 'kara',
+      [3, 4, 4, 3], ['temkinli'], '1941-07-19',
+      'Libya Genel Valisi ve Kuzey Afrika\'daki İtalyan üst komutanı. ' +
+      'Kâğıt üzerinde Rommel\'in amiriydi; Rommel ona "Bombastico" derdi ' +
+      've emirlerini çoğu kez görmezden geldi.',
+      'Yetkisi vardı, otoritesi yoktu; komuta zinciri bölünmüştü: ' +
+      'taarruz 3.',
+      KA, '1943-02-02',
+    ),
+    cmd(
+      'ka_messe', 'Giovanni Messe', 'Mareşal', 'italyan', 'ottoman', 'kara',
+      [4, 6, 5, 4], ['inatci_savunma', 'siper_ustasi'], '1943-02-01',
+      '1. İtalyan Ordusu Komutanı. Mareth Hattı\'nda Montgomery\'yi ' +
+      'günlerce oyaladı ve ordusunu düzenli çekti. Afrika\'daki son ' +
+      'Mihver komutanı olarak 13 Mayıs 1943\'te teslim oldu.',
+      'İtalyan ordusunun çölde en iyi savunan komutanı: savunma 6. ' +
+      'Kötü olan asker değil, teçhizat ve komutaydı.',
+      KA,
+    ),
+    cmd(
+      'ka_eisenhower', 'Dwight D. Eisenhower', 'Orgeneral', 'amerikan', 'entente', 'kara',
+      [4, 5, 6, 7], ['lojistikci', 'agir_kanli'], '1942-11-08',
+      'Müttefik Kuvvetler Başkomutanı. Meşale Harekâtı\'nı yönetti. ' +
+      'Asıl işi muharebe değil, Amerikan-İngiliz-Fransız koalisyonunu ' +
+      'tek komuta altında çalışır tutmaktı.',
+      'Koalisyon ve ikmal yöneticisi: lojistik 7, taarruz 4.',
+      KA,
+    ),
+    cmd(
+      'ka_patton', 'George S. Patton', 'Korgeneral', 'amerikan', 'entente', 'kara',
+      [6, 4, 5, 4], ['taarruz_ruhu', 'atilgan_amiral'], '1943-03-06',
+      'Kasserine bozgunundan sonra II. Kolordu\'nun başına getirildi. ' +
+      'İki haftada disiplini yeniden kurdu ve kolorduyu El Guettar\'da ' +
+      'Alman zırhlısını püskürtecek hâle getirdi.',
+      'Kırılan birliği hızla toparladı, taarruzda sert: taarruz 6.',
+      KA, '1943-04-15',
+    ),
+    cmd(
+      'ka_bradley', 'Omar Bradley', 'Korgeneral', 'amerikan', 'entente', 'kara',
+      [5, 5, 6, 5], ['temkinli', 'ilham_veren'], '1943-04-16',
+      'Patton\'dan sonra II. Kolordu Komutanı. Kolorduyu kuzeye, Bizerte ' +
+      'yönüne kaydırdı ve Tunus\'un düşüşünde Amerikan payını orada aldı.',
+      'Gösterişsiz, hesaplı, askerine yakın: planlama 6.',
+      KA,
+    ),
   ],
 
   events: [
@@ -111,10 +234,12 @@ export const KUZEY_AFRIKA_PACK: FrontPack = {
       date: '1940-12-09',
       title: 'Pusula Harekâtı',
       body:
-        'Baskın niteliğindeki İngiliz karşı taarruzu beş günlük bir ' +
-        'akın olarak planlanmıştı; iki ayda Bingazi\'ye ulaştı ve ' +
-        '10. İtalyan Ordusunu imha etti. Bu yenilgi Almanya\'yı cepheye ' +
-        'kuvvet göndermeye zorladı.',
+        'O\'Connor\'ın baskın taarruzu beş günlük bir akın olarak ' +
+        'planlanmıştı; iki ayda 500 kilometre ilerleyip 10. İtalyan ' +
+        'Ordusunu imha etti. 30.000 kişilik kuvvet, sayıca kat kat üstün ' +
+        'bir orduyu dağıttı ve yaklaşık 130.000 esir aldı. Harekât ' +
+        'düşman bittiği için değil, İngiliz ikmali Bingazi\'den öteye ' +
+        'yetişmediği için durdu.',
       kind: 'kara',
       src: KA,
     },
@@ -178,9 +303,137 @@ export const KUZEY_AFRIKA_PACK: FrontPack = {
       date: '1943-05-13',
       title: 'Tunus — Afrika Bitti',
       body:
-        'Mihver kuvvetleri Tunus\'ta teslim oldu. Esir sayısı Stalingrad ' +
-        'ile karşılaştırılabilir düzeydeydi. Akdeniz Müttefiklere açıldı ve ' +
-        'Sicilya çıkarmasının yolu hazırlandı.',
+        'Afrika Ordu Grubu teslim oldu. Esir sayısı kaynaklara göre ' +
+        '230.000 ile 275.000 arasında verilir; her hâlükârda ' +
+        'Stalingrad\'da alınan esirden fazladır — buna rağmen bu teslim ' +
+        'çok daha az konuşulur. Akdeniz Müttefiklere açıldı ve Sicilya ' +
+        'çıkarmasının yolu hazırlandı.',
+      kind: 'kara',
+      src: KA,
+    },
+    {
+      id: 'ka_beda_fomm',
+      date: '1941-02-07',
+      title: 'Beda Fomm — Ordunun Önünü Kesmek',
+      body:
+        '7. Zırhlı Tümen çölün içinden kestirme giderek çekilen İtalyan ' +
+        'ordusunun kıyı yolundaki önünü kesti. Tek yol vardı, onu tutan ' +
+        'orduyu teslim alıyordu: çölde arazi değil, YOL kazanılır.',
+      kind: 'kara',
+      src: KA,
+    },
+    {
+      id: 'ka_tobruk_kusatma',
+      date: '1941-04-10',
+      title: 'Tobruk Kuşatması Başladı',
+      body:
+        'Rommel Mısır sınırına dayandı ama Tobruk limanını alamadı ve ' +
+        'arkasında bıraktı. 9. Avustralya Tümeni limanı 240 gün tuttu; ' +
+        'Rommel ikmalini 1.500 kilometre uzaktaki Trablus\'tan çekmek ' +
+        'zorunda kaldı. Alınmayan tek liman bütün taarruzu zayıflattı.',
+      kind: 'kara',
+      src: KA,
+    },
+    {
+      id: 'ka_battleaxe',
+      date: '1941-06-15',
+      title: 'Balta Harekâtı — Pahalı Ders',
+      body:
+        'Wavell, Tobruk\'u kurtarmak için erken taarruz etti. İngiliz ' +
+        'tankları Halfaya\'da mevzilenmiş 88\'liklerin üstüne sürüldü ve ' +
+        'iki günde yakıldı. Ders: zırhı topçu desteği olmadan tahkimli ' +
+        'tanksavar hattına sürmek tümen harcar. Wavell görevden alındı.',
+      kind: 'kara',
+      src: KA,
+    },
+    {
+      id: 'ka_crusader',
+      date: '1941-11-18',
+      title: 'Haçlı Seferi Harekâtı',
+      body:
+        'Yeni kurulan 8. Ordu taarruz etti; muharebe öyle karıştı ki iki ' +
+        'taraf da yenildiğini sandı. Auchinleck çekilmek isteyen ' +
+        'Cunningham\'ı görevden alıp taarruzu sürdürdü, Tobruk kuşatması ' +
+        'kalktı. Sinirini koruyan taraf kazandı.',
+      kind: 'kara',
+      src: KA,
+    },
+    {
+      id: 'ka_rommel_efsanesi',
+      date: '1942-03-20',
+      title: '"Rommel Doğaüstü Değildir"',
+      body:
+        'Auchinleck, komutanlarına yazılı bir genelge yollayıp askerin ' +
+        'Rommel\'i olağanüstü bir varlık saymasını yasakladı: "ondan ' +
+        'bahsederken \'düşman\' veya \'Mihver kuvvetleri\' deyin, Rommel ' +
+        'demeyin." Çöl Tilkisi efsanesinin büyük kısmı, kendi yenilgisini ' +
+        'açıklamak isteyen İngiliz basınının ürünüydü. Kaynaklar ' +
+        'genelgenin tam gününde ayrışır; 1942 ilkbaharıdır.',
+      kind: 'siyasi',
+      src: KA,
+    },
+    {
+      id: 'ka_malta_ikmal',
+      date: '1942-08-15',
+      title: 'Malta ve Boğulan Konvoylar',
+      body:
+        'Rommel\'in Mısır\'a ulaşamamasının sebebi İngiliz tümenleri ' +
+        'değil, Malta\'dan kalkan uçak ve denizaltılardı: Libya\'ya giden ' +
+        'yakıt ve mühimmat konvoyları yolda batırıldı. Ağustos 1942\'de ' +
+        'Pedestal konvoyunun kalıntısı Malta\'ya ulaşınca ada ayakta ' +
+        'kaldı ve ambargo sürdü. Çöldeki tank, limanda olmayan yakıt ' +
+        'kadar menzillidir.',
+      kind: 'ikmal',
+      src: KA,
+    },
+    {
+      id: 'ka_alam_el_halfa',
+      date: '1942-08-30',
+      title: 'Alam el Halfa — Rommel\'in Son Taarruzu',
+      body:
+        'Rommel güney kanadından son bir kuşatma denedi. Montgomery ' +
+        'kanadı kovalamak yerine zırhını Alam el Halfa sırtına gömdü ve ' +
+        'bekledi. Yakıtı biten Mihver zırhlısı geri döndü. Bundan sonra ' +
+        'inisiyatif bir daha Mihver\'e geçmedi.',
+      kind: 'kara',
+      src: KA,
+    },
+    {
+      id: 'ka_sarkac',
+      date: '1942-12-20',
+      title: 'Çölün Sarkacı',
+      body:
+        'Cephe iki yılda dört kez aynı 1.200 kilometrelik kıyı şeridinde ' +
+        'gidip geldi. Her ilerleyen taraf ikmal hattını uzattı, limana ' +
+        'uzaklaştıkça zayıfladı; gerileyen taraf kendi depolarına ' +
+        'yaklaştıkça güçlendi. Çölü general değil mesafe yönetti — ' +
+        'muharebeler hep ikmalin bittiği yerde kazanıldı.',
+      kind: 'ikmal',
+      src: KA,
+    },
+    {
+      id: 'ka_kasserine',
+      date: '1943-02-19',
+      title: 'Kasserine Geçidi',
+      body:
+        'Rommel, Tunus\'ta tecrübesiz II. Amerikan Kolordusu\'na vurdu ve ' +
+        'onu onlarca kilometre geri attı — Amerikan ordusunun Avrupa ' +
+        'sahnesindeki ilk büyük yenilgisi. Sonuç kalıcı olmadı: Müttefikler ' +
+        'komutayı birleştirdi, Patton kolordunun başına geçti. Yenilgiden ' +
+        'ders çıkarabilen ordu tehlikelidir.',
+      kind: 'kara',
+      src: KA,
+    },
+    {
+      id: 'ka_mareth',
+      date: '1943-03-20',
+      title: 'Mareth Hattı',
+      body:
+        'Messe\'nin 1. İtalyan Ordusu, Fransızların Mareth\'te bıraktığı ' +
+        'eski tahkimatta direndi; cepheden taarruz kırıldı. Montgomery ' +
+        'ancak Yeni Zelanda kolunu çölden 300 kilometre dolandırıp ' +
+        'kanada sarkıtınca hattı aştı. İtalyan askerinin kötü olduğu ' +
+        'klişesi burada çöker.',
       kind: 'kara',
       src: KA,
     },
