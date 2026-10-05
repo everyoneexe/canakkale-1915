@@ -107,6 +107,25 @@ Tarihsel kilit döngü birebir modellenmiştir:
    Liman von Sanders'in raporu: "Düşman çok cephane az insan harcıyor, biz pek
    çok insan az cephane feda ediyoruz."
 
+İki savaşın ortak mekaniği, Çanakkale'nin dersini genelleştirir:
+
+7. **Taarruz eden korumasız kalır.** Muharebede her iki taraf KARŞI TARAFIN
+   korumasına vurur. Savunanın koruması `defence`, saldıranın `breakthrough`
+   (arayüzde "Delme"). Siperdeki piyadenin delmesi düşüktür — taarruz bu
+   yüzden pahalıdır; tankın yüksektir, tank bunun için vardır.
+8. **Zırh, delinemediği sürece zırhtır.** Hedefin sertliği oranında yumuşak
+   ateş yerine zırhlı ateş işler; delme zırhın yarısının altındaysa ateş
+   yarılanır. Tanksavarsız 1941 Sovyet tüfek tümeni panzer karşısında
+   1.84 oranla ezilir, tanksavarlı 1943 tümeni 0.98 ile başa baş gelir.
+   1915 şablonlarının hepsinde zırh sıfırdır; kural o cepheye hiç dokunmaz.
+9. **Sahile sığan kuvvet sınırlıdır.** Çıkarmada arazinin cephe genişliği
+   bir günde karaya çıkabilecek kuvveti sınırlar; sığmayan birlik gemide
+   kalıp ikinci dalga olur. Tahkimli sahil kaybı katlar: aynı savunana karşı
+   tahkimatsız 1.694, 2. seviyede 3.102, 4. seviyede 4.509 kayıp.
+10. **İkmal mesafeyle tükenir.** Yayılım ikmal merkezlerinden başlar ve her
+    adımda azalır; menzil harita ölçeğine bağlıdır. İleri giden ordu kendi
+    hattını uzatıp zayıflatır — çölde de, Rusya'da da aynı sarkaç.
+
 ## Harita nasıl üretildi
 
 `src/data/map.json` ve `public/relief.png` türetilmiş dosyalardır:
@@ -339,9 +358,12 @@ binip okunmaz bir yığın oluyordu.
 
 ## Cepheler ve içerik paketleri
 
-Oyun **iki savaş, 16 cephe** taşır. Çanakkale'nin kendi yüksek çözünürlüklü
-haritası var; diğer 15 cephe ortak dünya il haritasını farklı kutu ve
-tarihle açar.
+Oyun **iki savaş, 18 tiyatro** taşır. Dördünün (Çanakkale, Kafkas,
+Mezopotamya, Sina-Filistin) kendi yüksek çözünürlüklü haritası var;
+kalanı ortak dünya il haritasını farklı kutu ve tarihle açar.
+
+Toplam: **15 içerik paketi · 305 adlı birlik · 174 komutan · 202 olay.**
+Bunun 157 birlik / 118 komutan / 128 olayı 2. Dünya Savaşı cephelerinde.
 
 Önceden Çanakkale dışındaki her cephe bütün içeriğini **prosedürel**
 üretiyordu: tümenler ulusun nüfusundan hesaplanıp `"Rusya 7. Tümen"` diye
@@ -511,18 +533,27 @@ kare ilerler, `renderer.render` yalnız `needsRender` işaretliyken çağrılır
 ## Mimari
 
 ```
-src/core/      types.ts (sözleşme) · geo.ts (harita yükleme, izdüşüm, A*)
-               heap.ts (A* için ikili yığın)
-src/data/      tarihsel veri — her kayıt kaynaklı · theatres.ts (16 cephe)
-src/engine/    turn.ts (çözüm sırası) · combat · naval · air · supply · orders
+src/core/      types.ts (sözleşme) · geo.ts (harita kaydı, yükleme, A*)
+               heap.ts (A* ve ikmal yayılımı için ikili yığın)
+src/data/      tarihsel veri — her kayıt kaynaklı
+               battalions · templates · terrain · symbols   (birim verisi)
+               theatres.ts (18 cephe) · fronts/ (15 içerik paketi)
+src/engine/    turn.ts (çözüm sırası) + turn-land · turn-naval
+               combat · naval · air · supply · orders
+               scenario (Çanakkale) · world-scenario (ortak dünya haritası)
+               detailed-scenario (kendi haritası olan cepheler)
+               theatre-setup.ts (hangi cephe hangi harita ve senaryoyla)
                ai.ts (Çanakkale) · world-ai.ts (topolojik, harita bağımsız)
-               scenario.ts (Çanakkale) · world-scenario.ts (iki savaş)
-src/render/    map.ts — Pixi katmanları, animasyonlu kamera ve dolgular
-src/ui/        globe.ts (cephe seçim küresi) · panel.ts (seçim paneli)
-tools/         Çanakkale harita zinciri
+src/render/    map.ts (Pixi katmanları, kamera) · counter.ts (birim sayacı)
+src/ui/        globe · panel · legend · journal · dom
+tools/         harita zinciri: fetch_terrain.py + build_map.py + seeds_*.py
 tools/world/   dünya + küre zinciri
-test/          regresyon testleri
+test/          regresyon testleri — her biri yaşanmış bir hatayı yakalar
 ```
+
+Katman kuralı tek yönlüdür: `core` hiçbir şeyi bilmez, `data` yalnız
+`core`'u, `engine` `core` + `data`'yı, `render`/`ui` hepsini. `engine`
+içinde `document` ya da `window` geçmez. Ayrıntı: **`CLAUDE.md`**.
 
 ### Ölçek kararları
 
@@ -596,25 +627,48 @@ Katkıya açık, önem sırasına göre:
 - [ ] **Kaydet / yükle.** Durum tamamen serileştirilebilir (`rngState` dahil,
       determinizm testli) — `JSON.stringify(state)` yeterli, sadece arayüze
       bağlanmadı. *Başlamak için en kolay iş.*
+- [ ] **Ayrıntılı cephelerde donanma yok.** Kafkas, Mezopotamya ve
+      Sina-Filistin kendi haritalarını aldı ama cephe paketleri yalnız kara
+      teşkilâtı taşıyor. Mezopotamya nehir harekâtıydı; Dicle gambotları
+      olmadan cephenin yarısı eksik.
 - [ ] **Yapay zekâ çıkarmadan sonra pasif.** Köprübaşını tutuyor ama içeriye
-      zorlamıyor. `planLandUnit` içindeki taarruz eşiği (`bestRatio > 1.45`)
-      ve hedef seçimi geliştirilmeli.
+      zorlamıyor. Dünya haritasında amfibi harekât eklendi, ama 150 turda
+      yalnız beş ile çıkarma yapılıyor — hedef seçimi daha atak olmalı.
 - [ ] **Denge.** Osmanlı tarafı şu an belirgin biçimde daha kolay. Tarihsel
       sonuç bu, ama oyun olarak İtilaf'ın gerçek bir şansı olmalı.
 - [ ] **Denizaltı harbi.** AE2, E11, E14, Muavenet-i Milliye, U-21 — hepsi
       olay metinlerinde var ama oynanabilir sistem değil.
-- [ ] **Tüm Osmanlı haritası** (aşağıya bakın).
 - [ ] **Ses.** Yok.
 - [ ] **Mobil / dokunmatik.** Arayüz masaüstü için tasarlandı.
 - [ ] **İngilizce yerelleştirme.** Metinler şu an kodun içinde gömülü Türkçe.
 
-## Sonraki adım: tüm Osmanlı haritası
+## Ayrıntılı tiyatrolar
 
-Harita verisi tamamen veri odaklıdır. Genişletmek için `tools/build_map.py`
-içindeki `SEEDS` listesine yeni il tohumları, `fetch_terrain.py` içindeki
-`WEST/SOUTH/EAST/NORTH` kutusuna yeni sınırlar eklemek ve
-`THEATRE_RADIUS_M`'yi büyütmek yeterli. Motorda tiyatroya özgü sabit yoktur;
-zafer koşulları `scenario.ts` içindeki `VictoryRules` ile senaryo başına verilir.
+Dört cephenin kendi yüksek çözünürlüklü haritası var; kalan on dördü ortak
+dünya haritasında kendi kutusuyla oynanır.
+
+| Tiyatro | İl | Kaynak | Zoom |
+| --- | --- | --- | --- |
+| Çanakkale | 47 | AWS terrarium + OSM/Nominatim | z12 (~29 m/px) |
+| Kafkas | 52 | AWS terrarium | z10 (~115 m/px) |
+| Mezopotamya | 47 | AWS terrarium | z10 |
+| Sina-Filistin | 44 | AWS terrarium | z10 |
+
+Yeni bir ayrıntılı tiyatro üç adım:
+
+```bash
+python3 tools/fetch_terrain.py <ad>   # bbox ve zoom REGIONS tablosunda
+python3 tools/build_map.py <ad>       # tohumlar tools/seeds_<ad>.py
+```
+
+sonra `core/geo.ts` içindeki `DETAILED_MAPS` kaydına bir satır ve
+`theatres.ts` içinde `ownMap: '<ad>'`. Motorda tiyatroya özgü sabit yoktur.
+
+Ölçek sabitleri bölge tablosunda tutulur, çünkü ölçek gerçekten değişiyor:
+Çanakkale 60 km'lik bir boğaz, Kafkas 450 km'lik bir dağ cephesi. Aynı
+sadeleştirme toleransı ya da tiyatro yarıçapı ikisine birden uymuyor.
+Genelleştirme sırasında Çanakkale'nin **birebir** yeniden üretildiği
+doğrulandı (`map.json` ve `relief.png` md5'leri değişmedi).
 
 ## Katkı
 
