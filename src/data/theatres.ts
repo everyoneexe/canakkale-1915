@@ -183,20 +183,21 @@ export const THEATRES: readonly Theatre[] = [
     src: 'https://tr.wikipedia.org/wiki/Kûtü%27l-Amâre_Kuşatması',
   },
   {
-    id: 'ww1_ortadogu',
+    id: 'ww1_sina_filistin',
     war: 'ww1',
-    name: 'Orta Doğu Cephesi',
-    tagline: 'Mezopotamya, Sina, Filistin',
+    name: 'Sina ve Filistin Cephesi',
+    tagline: 'Süveyş\'ten Halep\'e · çöl, demiryolu, su',
     desc:
-      'Britanya ve Fransa 5 Kasım 1914\'te Osmanlı Devleti\'ne savaş ilan etti. '
-      + 'İngilizler Bağdat\'a yürüdü, 9 Aralık 1917\'de Kudüs\'ü aldı. '
-      + 'Mondros Mütarekesi 30 Ekim 1918\'de imzalandı.',
-    start: '1914-11-05',
+      'Osmanlı 4. Ordusu 1915 ve 1916\'da Süveyş Kanalı\'nı almaya çalıştı, '
+      + 'ikisi de başarısız oldu. Allenby 27 Ekim 1917\'de Gazze-Birüssebi '
+      + 'hattını kırdı, 9 Aralık\'ta Kudüs\'e girdi. 19 Eylül 1918\'de Nablus\'ta '
+      + 'cephe çöktü; 38 günde 560 kilometre ilerleyen İngilizler Halep\'e ulaştı.',
+    start: '1915-02-03',
     end: '1918-10-30',
-    bbox: [30, 26, 50, 40],
-    pin: [40, 33],
+    bbox: [30.5, 28.5, 38.5, 37.0],
+    pin: [35.0, 31.6],
     sides: { a: 'Osmanlı İmparatorluğu', b: 'Britanya · Arap İsyanı' },
-    src: WWI_KEY,
+    src: 'https://tr.wikipedia.org/wiki/Sina_ve_Filistin_Cephesi',
   },
   {
     id: 'ww1_dogu_afrika',
