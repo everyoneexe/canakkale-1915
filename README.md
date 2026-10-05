@@ -281,6 +281,20 @@ Renkler [@destanevreni'nin Çanakkale 1915 harita animasyonundan](.) ffmpeg kare
 | mayın | `#e4544a` |
 | gemi | `#5d7296` |
 
+**Cephe hattı.** Siyasi modda illeri boyamak nerede durulduğunu söylemiyordu:
+iki dost hücrenin arasındaki sınır ile cephe aynı kalınlıkta çiziliyordu.
+Komşu illerin PAYLAŞTIĞI çokgen kenarları bir kez indekslenir (yuvarlanmış uç
+çifti anahtar; Voronoi hücreleri komşusuyla aynı köşeleri paylaşır), her
+karede yalnız kontrolcüleri karşılaştırılır. Kontrolcüsü farklı kara illeri
+arasındaki kenarlar koyu astarlı amber bir hatla çizilir — hem Osmanlı
+kırmızısının hem İtilaf mavisinin üstünde okunsun diye. İl ağının kendisi
+%22 alfaya çekildi; eşit kalınlıkta çizilince Voronoi gürültüsü asıl
+okunması gereken çizgiyi bastırıyordu.
+
+Tek ile ait kenarlar il grafiğinin **dış sınırıdır** ve ayrıca çizilir;
+çizilmeyince taraf boyası arazinin ortasında düz bir dikey çizgide kesilip
+çizim hatası gibi duruyordu.
+
 Tipografi: başlıklarda Archivo 800, her yerde JetBrains Mono. Rölyef, kuzeybatı
 ışıklı tepe gölgelemesiyle çizilir — Conkbayırı ve Kocaçimen'in Arıburnu'na
 nasıl hâkim olduğu ancak böyle okunuyor.
@@ -364,6 +378,32 @@ ilerleyemez ve ağır kayıp verirse kara harekâtına geçer.
 Fabrika `freshAiMemory()` bilerek `core/types.ts` içinde: `ai.ts` içindeyken
 `scenario.ts → ai.ts → scenario.ts` döngüsü oluşuyor ve `ai.ts`'in modül
 başındaki `dayOf()` çağrısı `START_DATE` henüz TDZ'deyken patlıyordu.
+
+## Çizim başarımı
+
+Harita **istek üzerine** çizilir. Pixi'nin kendi tickerı sahneyi her kare
+yeniden kompozit ediyordu; tur tabanlı bir oyunda ekran çoğu zaman sabit
+ve üst üste binen tam ekran doku katmanları (arazi, zemin, il dolgusu,
+kıyı) zayıf tümleşik GPU'da boşuna doldurma yapıyordu.
+
+Ölçüm (Intel UHD 620, 2000×1188):
+
+| | önce | sonra |
+| --- | --- | --- |
+| Çanakkale, boşta | 5 fps | **61 fps** |
+| Dünya haritası, boşta | 6 fps | **61 fps** |
+
+Darboğazın Pixi olduğu şöyle bulundu: CPU profilinde JS %57 **boşta**, tick
+4,5 saniyede 10 ms. Ticker durdurulunca 5 → 61. Katman katman kapatınca
+maliyet dağılımı çıktı — `gRelief` 10, `gBackdrop` 17, `gMines` 25,
+`gFillLayer` 29 fps (tek başlarına). Hepsi doldurma hızı.
+
+`autoStart: false` + kendi `requestAnimationFrame` döngümüz: animasyon her
+kare ilerler, `renderer.render` yalnız `needsRender` işaretliyken çağrılır.
+
+> Ölçüm uyarısı: ilk denemeler aynı tarayıcıda açık ikinci bir WebGL
+> sekmesi yüzünden 1-2 fps gösteriyordu. Boş sayfa kontrolü (61 fps) ve
+> tek sekme ölçümü olmadan yanlış yere bakılıyordu.
 
 ## Mimari
 

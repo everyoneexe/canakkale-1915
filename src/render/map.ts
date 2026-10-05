@@ -98,12 +98,30 @@ interface ProvinceNode {
 
 export class MapView {
   readonly app = new Application();
+  /** Sahnenin yeniden kompozit edilmesi gerekiyor mu. */
+  private needsRender = true;
+  private raf = 0;
 
   private world = new Container();
   private gBackdrop = new Graphics();
   private gRelief = new Container();
   private gFillLayer = new Container();
   private gBorders = new Graphics();
+  /** Cephe hattı — yalnız kontrolcüsü farklı iller arasındaki ortak kenarlar. */
+  private gFront = new Graphics();
+  /**
+   * Komşu il çiftlerinin PAYLAŞTIĞI çokgen kenarları.
+   *
+   * Bir kez kurulur. Her karede yalnız kontrolcüleri karşılaştırılır; 4.575
+   * ilde kenar aramak kare başına yapılamaz.
+   */
+  /** Son çizilen cephe hattının imzası. */
+  private frontSig = '';
+  private sharedEdges: {
+    a: ProvinceId;
+    b: ProvinceId;
+    x1: number; y1: number; x2: number; y2: number;
+  }[] = [];
   private gCoast = new Graphics();
   private gHighlight = new Graphics();
   private gMines = new Graphics();
@@ -171,12 +189,20 @@ export class MapView {
       autoDensity: true,
       resizeTo: window,
       preference: 'webgl',
+      // Pixi'nin kendi tickerı sahneyi HER KARE yeniden kompozit ediyordu.
+      // Tur tabanlı bir oyunda ekran çoğu zaman sabit; üst üste binen tam
+      // ekran doku katmanları (arazi, zemin, dolgu, kıyı) zayıf tümleşik
+      // GPU'da boşuna 60 Hz doldurma yapıp kare hızını 6'ya düşürüyordu.
+      // Çizim artık istek üzerine: aşağıdaki döngü yalnız bir şey
+      // değiştiğinde `render` çağırır.
+      autoStart: false,
     });
 
     this.gBackdrop.zIndex = LAYER.relief - 1;
     this.gRelief.zIndex = LAYER.relief;
     this.gFillLayer.zIndex = LAYER.provinceFill;
     this.gBorders.zIndex = LAYER.provinceEdge;
+    this.gFront.zIndex = LAYER.frontline;
     this.gCoast.zIndex = LAYER.coast;
     this.gHighlight.zIndex = LAYER.coast + 1;
     this.gMines.zIndex = LAYER.minefield;
@@ -191,6 +217,7 @@ export class MapView {
       this.gRelief,
       this.gFillLayer,
       this.gBorders,
+      this.gFront,
       this.gCoast,
       this.gHighlight,
       this.gMines,
@@ -204,8 +231,28 @@ export class MapView {
     this.bindInput(canvas);
     window.addEventListener('resize', () => this.fitToMap(true));
 
-    // Pixi'nin kendi tickerı kareyi sürer; animasyon burada ilerletilir.
-    this.app.ticker.add(() => this.tick());
+    // Kendi döngümüz: animasyonu her kare ilerletir, sahneyi YALNIZ
+    // gerektiğinde kompozit eder.
+    const loop = () => {
+      this.tick();
+      if (this.needsRender) {
+        this.needsRender = false;
+        this.app.renderer.render(this.app.stage);
+      }
+      this.raf = requestAnimationFrame(loop);
+    };
+    this.raf = requestAnimationFrame(loop);
+  }
+
+  /** Bir sonraki karede sahne yeniden kompozit edilsin. */
+  invalidate(): void {
+    this.needsRender = true;
+  }
+
+  /** Döngüyü durdur — harita kapatılırken sızıntı bırakmasın. */
+  destroyLoop(): void {
+    if (this.raf !== 0) cancelAnimationFrame(this.raf);
+    this.raf = 0;
   }
 
   /** Harita değiştiğinde çağrılır: geometriyi baştan kurar. */
@@ -356,6 +403,11 @@ export class MapView {
     const hairline = (gameMap().bounds.maxX - gameMap().bounds.minX) / 4000;
 
     this.gBorders.clear();
+    this.gFront.clear();
+    this.sharedEdges = [];
+    /** Yuvarlanmış kenar anahtarı -> o kenarı paylaşan iller. */
+    const edgeOwners = new Map<string, ProvinceId[]>();
+    const q = (n: number) => Math.round(n);
     for (const p of list) {
       if (p.polygon.length < 3) continue;
       const pts: number[] = [];
@@ -371,19 +423,117 @@ export class MapView {
         if (v.y > maxY) maxY = v.y;
       }
 
+      // Kenarları indeksle: Voronoi hücreleri komşusuyla AYNI köşeleri
+      // paylaşır, bu yüzden yuvarlanmış uç çifti güvenilir bir anahtar.
+      if (!p.isSea) {
+        for (let i = 0; i < p.polygon.length; i++) {
+          const v1 = p.polygon[i]!;
+          const v2 = p.polygon[(i + 1) % p.polygon.length]!;
+          const k1 = `${q(v1.x)},${q(v1.y)}`;
+          const k2 = `${q(v2.x)},${q(v2.y)}`;
+          const key = k1 < k2 ? `${k1}|${k2}` : `${k2}|${k1}`;
+          const owners = edgeOwners.get(key);
+          if (owners) owners.push(p.id);
+          else edgeOwners.set(key, [p.id]);
+        }
+      }
+
       const g = new Graphics();
       g.poly(pts).fill({ color: 0xffffff });
       g.eventMode = 'none';
+      // NOT: burada `blendMode = 'overlay'` denendi ve geri alındı. Görsel
+      // olarak güzeldi ama Pixi'de varsayılan dışı karışım batch'i kırıyor:
+      // dünya haritasının 4.575 ili 4.575 ayrı çizim çağrısına dönüşüp
+      // kare hızı 7'ye düştü. Rölyefin okunması zaten alfa ile sağlanıyor —
+      // akan arazi mozaiği eski karanlık dokudan çok daha parlak.
       this.gFillLayer.addChild(g);
       this.nodes.push({ province: p, fill: g, minX, minY, maxX, maxY });
 
       if (!p.isSea) {
+        // İl ağı yalnız zayıf bir doku olarak kalır. Eşit kalınlıkta
+        // çizilince Voronoi hücreleri gürültü yapıyor ve asıl okunması
+        // gereken şeyi — cephe hattını — bastırıyordu.
         this.gBorders.poly(pts, true).stroke({
           width: hairline,
           color: C.accentDim,
-          alpha: 0.5,
+          alpha: 0.22,
         });
       }
+    }
+
+    // Tek bir ile ait kenarlar il grafiğinin DIŞ sınırıdır. Çizilmezse
+    // taraf boyası düz bir dikey çizgide kesiliyor ve arazinin ortasında
+    // çizim hatası gibi duruyordu; çizilince oynanabilir tiyatronun sınırı
+    // olduğu okunuyor.
+    for (const [key, owners] of edgeOwners) {
+      if (owners.length !== 1) continue;
+      const [p1, p2] = key.split('|');
+      const [ax, ay] = p1!.split(',').map(Number);
+      const [bx, by] = p2!.split(',').map(Number);
+      this.gBorders
+        .moveTo(ax!, ay!)
+        .lineTo(bx!, by!)
+        .stroke({ width: hairline * 2.2, color: C.accentDim, alpha: 0.5 });
+    }
+
+    for (const [key, owners] of edgeOwners) {
+      if (owners.length !== 2) continue;
+      const [p1, p2] = key.split('|');
+      const [ax, ay] = p1!.split(',').map(Number);
+      const [bx, by] = p2!.split(',').map(Number);
+      this.sharedEdges.push({
+        a: owners[0]!, b: owners[1]!,
+        x1: ax!, y1: ay!, x2: bx!, y2: by!,
+      });
+    }
+  }
+
+  /**
+   * Cephe hattı.
+   *
+   * Siyasi harita modunda illeri boyamak nerede durulduğunu söylemiyordu:
+   * iki kırmızı hücrenin arasındaki sınırla cephe sınırı aynı kalınlıkta
+   * çiziliyordu. Bir siper savaşı oyununda okunması gereken tek çizgi bu.
+   * Yalnız kontrolcüleri FARKLI kara illeri arasındaki ortak kenarlar
+   * çizilir; keşfedilmemiş iller hariç.
+   */
+  private drawFrontLine(s: GameState): void {
+    if (this.sharedEdges.length === 0) return;
+
+    // Hangi kenarların cephe olduğunu bulmak UCUZ (iki kayıt araması).
+    // Pahalı olan Pixi Graphics geometrisini yeniden kurmak: dünya
+    // haritasında her karede yapılınca kare hızı 7'ye düşüyordu. Bu yüzden
+    // önce liste çıkarılır, imzası değişmediyse çizim atlanır.
+    const front: number[] = [];
+    for (let i = 0; i < this.sharedEdges.length; i++) {
+      const e = this.sharedEdges[i]!;
+      const A = s.provinces[e.a];
+      const B = s.provinces[e.b];
+      if (!A || !B || A.controller === B.controller) continue;
+      if (!A.seen[s.playerSide] && !B.seen[s.playerSide]) continue;
+      front.push(i);
+    }
+
+    const sig = `${Math.round(Math.log2(this.zoom) * 8)}|${front.join(',')}`;
+    if (sig === this.frontSig) return;
+    this.frontSig = sig;
+
+    this.gFront.clear();
+    // Kampanya kadrajında tiyatro ~130 km / 1600 px ≈ 81 m/piksel; 90 m'lik
+    // çizgi bir pikselin altında kalıp kayboluyordu.
+    const w = Math.max(300, 3.0 / this.zoom);
+    for (const i of front) {
+      const e = this.sharedEdges[i]!;
+      // Koyu astar: hat hem Osmanlı kırmızısının hem İtilaf mavisinin
+      // üstünde okunmalı. Tek renk çizgi kendi zemininde kayboluyordu.
+      this.gFront
+        .moveTo(e.x1, e.y1)
+        .lineTo(e.x2, e.y2)
+        .stroke({ width: w * 2.1, color: 0x120d02, alpha: 0.75 });
+      this.gFront
+        .moveTo(e.x1, e.y1)
+        .lineTo(e.x2, e.y2)
+        .stroke({ width: w, color: C.accent, alpha: 0.95 });
     }
   }
 
@@ -460,6 +610,7 @@ export class MapView {
   private applyTransform(): void {
     this.world.scale.set(this.zoom);
     this.world.position.set(this.panX, this.panY);
+    this.needsRender = true;
     this.streamTerrain();
   }
 
@@ -776,6 +927,8 @@ export class MapView {
       dirty = true;
     }
 
+    if (dirty) this.needsRender = true;
+
     if (dirty && this.state) {
       // Kamera oynadıysa görünürlük kırpması değişti: dolgu hedefleri
       // yeniden hesaplanmalı, yoksa süzülerek gelen kadrajda iller hiç
@@ -831,8 +984,10 @@ export class MapView {
   draw(): void {
     const s = this.state;
     if (!s) return;
+    this.needsRender = true;
     this.paintProvinces(s);
     this.drawHighlight();
+    this.drawFrontLine(s);
     this.drawMines(s);
     this.drawForts(s);
     this.drawUnits(s);
