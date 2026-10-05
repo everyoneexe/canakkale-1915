@@ -23,7 +23,8 @@ import {
 import { C, LAYER } from '../style/tokens.ts';
 import { fortRange, liveShips } from '../engine/naval.ts';
 import { TERRAINS } from '../data/units.ts';
-import { TerrainTiles, zscale } from './tiles.ts';
+import { TerrainTiles } from './tiles.ts';
+import { zscale } from './terrain-mosaic.ts';
 
 /**
  * Harita çizimi — @destanevreni'nin animasyonundaki görsel dil:
