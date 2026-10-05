@@ -163,9 +163,16 @@ def ring_area(pts: np.ndarray) -> float:
 
 
 def main() -> None:
+    region = sys.argv[1] if len(sys.argv) > 1 else "canakkale"
+    if region not in REGIONS:
+        sys.exit(f"bilinmeyen bölge: {region} (seçenekler: {', '.join(REGIONS)})")
+    select_region(region)
+    print(f"── {region} ──")
     if not os.path.exists(ELEV):
-        sys.exit(f"{ELEV} yok — önce tools/fetch_terrain.py çalıştır")
-    if not os.path.exists(PLACES):
+        sys.exit(f"{ELEV} yok — önce tools/fetch_terrain.py {region} çalıştır")
+    # `places.json` yalnız OSM adıyla konan tohumlar için gerekir; koordinatı
+    # doğrudan verilen bölgeler onsuz derlenir.
+    if any("place" in s for s in SEEDS) and not os.path.exists(PLACES):
         sys.exit(f"{PLACES} yok — önce tools/geocode.py çalıştır")
 
     blob = np.load(ELEV)
@@ -236,7 +243,10 @@ def main() -> None:
             print(f"  · {s['id']}: iç su kütlesinden türetildi {lon:.4f},{lat:.4f}")
         else:
             lon, lat = s["lonlat"]
-            src = "tasarım"
+            # Koordinatın NEREDEN geldiği kayda geçer. Deniz illeri ve
+            # coğrafî bölütler oyun tasarımı gereği seçilir; gerçek bir
+            # yerleşimin koordinatı verildiyse tohum kendi kaynağını söyler.
+            src = s.get("src", "tasarım")
         c = int(np.clip(np.interp(lon, lons, cols), 0, W - 1))
         r = int(np.clip(np.interp(lat, lats[::-1], rows[::-1]), 0, H - 1))
         want_sea = s["kind"] == "sea"
@@ -411,7 +421,7 @@ def main() -> None:
     ])
     out = {
         "_source": {
-            "elevation": "AWS Terrain Tiles (terrarium) z12 — "
+            "elevation": f"AWS Terrain Tiles (terrarium) z{Z} — "
                          "https://registry.opendata.aws/terrain-tiles/",
             "places": "OpenStreetMap / Nominatim (ODbL) — "
                       "https://nominatim.openstreetmap.org/",

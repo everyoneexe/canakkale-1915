@@ -25,7 +25,7 @@ import { MinHeap } from './heap.ts';
  *   2. buraya bir satır
  *   3. `theatres.ts` içinde `ownMap: '<ad>'`
  */
-export type DetailedMapId = 'canakkale';
+export type DetailedMapId = 'canakkale' | 'kafkas' | 'mezopotamya' | 'sina';
 
 interface DetailedMap {
   /** `public/` altındaki rölyef dokusu. */
@@ -40,6 +40,18 @@ export const DETAILED_MAPS: Record<DetailedMapId, DetailedMap> = {
   canakkale: {
     relief: 'relief.png',
     load: () => import('../data/map.json'),
+  },
+  kafkas: {
+    relief: 'relief-kafkas.png',
+    load: () => import('../data/map-kafkas.json'),
+  },
+  mezopotamya: {
+    relief: 'relief-mezopotamya.png',
+    load: () => import('../data/map-mezopotamya.json'),
+  },
+  sina: {
+    relief: 'relief-sina.png',
+    load: () => import('../data/map-sina.json'),
   },
 };
 
