@@ -22,9 +22,9 @@ import {
 } from '../core/geo.ts';
 import { C, LAYER } from '../style/tokens.ts';
 import { fortRange, liveShips } from '../engine/naval.ts';
-import { unitSymbol } from '../data/symbols.ts';
 import { TERRAINS } from '../data/terrain.ts';
 import { TerrainTiles } from './tiles.ts';
+import { drawCounter } from './counter.ts';
 import { zscale } from './terrain-mosaic.ts';
 
 /**
@@ -1347,73 +1347,12 @@ export class MapView {
       const key = `k:${st.side}:${id}`;
       c.position.set(...this.easePos(key, p.center, dt));
       c.scale.set(scale * (st.combat ? 1.12 : 1));
-      const g = c.children[0] as Graphics;
-      const t = c.children[1] as Text;
-      const eTxt = c.children[2] as Text;
-      const col = st.side === 'ottoman' ? C.ottoman : C.entente;
-      const sym = unitSymbol(st.tpl);
-      const w = 34;
-      const h = 17;
-
-      g.clear()
-        .rect(-w / 2, -h / 2, w, h)
-        .fill({ color: C.panel, alpha: 0.92 })
-        .stroke({ width: 1.2, color: st.combat ? C.mine : col, alpha: 1 });
-
-      // ── Kol sembolü ──
-      // Hepsi aynı "X" ile çiziliyordu: haritada topçu alayı ile piyade
-      // tümeni ayırt edilemiyordu.
-      const L = -w / 2 + 3;
-      const R = -w / 2 + 11;
-      const T = -h / 2 + 3;
-      const B = h / 2 - 3;
-      const line = { width: 1, color: col, alpha: 0.85 } as const;
-      switch (sym.branch) {
-        case 'topcu':
-          // Topçu: dolu daire.
-          g.circle((L + R) / 2, 0, 2.6).fill({ color: col, alpha: 0.85 });
-          break;
-        case 'zirhli':
-          // Zırhlı: NATO oval. Elips çizilmiyor, iki yay + iki kenar.
-          g.ellipse((L + R) / 2, 0, (R - L) / 2, (B - T) / 2.6).stroke(line);
-          break;
-        case 'suvari':
-          // Süvari: tek eğik çizgi.
-          g.moveTo(L, B).lineTo(R, T).stroke(line);
-          break;
-        case 'istihkam':
-          // İstihkâm: köşeli "E" sırtı.
-          g.moveTo(R, T).lineTo(L, T).lineTo(L, B).lineTo(R, B).stroke(line);
-          g.moveTo(L, 0).lineTo(R - 2, 0).stroke(line);
-          break;
-        case 'deniz':
-          // Deniz piyadesi: piyade çaprazı + altında dalga çizgisi.
-          g.moveTo(L, T).lineTo(R, B).moveTo(R, T).lineTo(L, B).stroke(line);
-          g.moveTo(L, B + 1.5).lineTo(R, B + 1.5).stroke({ ...line, alpha: 0.6 });
-          break;
-        default:
-          // Piyade: çapraz.
-          g.moveTo(L, T).lineTo(R, B).moveTo(R, T).lineTo(L, B).stroke(line);
-      }
-
-      // ── Organizasyon çubuğu ──
-      // Muharebeyi kıran şey insan kaybı değil organizasyon; sayaçta
-      // görünmediği için oyuncu hangi birliğin kırılmak üzere olduğunu
-      // ancak panele tıklayarak öğreniyordu.
-      const ratio = st.maxOrg > 0 ? Math.max(0, Math.min(1, st.org / st.maxOrg)) : 0;
-      const barY = h / 2 + 1.5;
-      g.rect(-w / 2, barY, w, 2).fill({ color: 0x000000, alpha: 0.55 });
-      g.rect(-w / 2, barY, w * ratio, 2).fill({
-        color: ratio > 0.6 ? 0x7fc08a : ratio > 0.3 ? C.accent : C.mine,
-        alpha: 0.95,
-      });
-
-      eTxt.text = sym.echelon;
-      eTxt.y = -h / 2 - 1;
-      t.text = st.men >= 1000 ? `${Math.round(st.men / 1000)}B` : String(st.men);
-      t.x = 6;
-      t.y = 0;
-      if (st.n > 1) t.text += `·${st.n}`;
+      drawCounter(
+        c.children[0] as Graphics,
+        c.children[1] as Text,
+        c.children[2] as Text,
+        st,
+      );
     }
 
     for (const f of Object.values(s.fleets)) {
