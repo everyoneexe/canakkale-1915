@@ -14,7 +14,9 @@ dist/
 # ── Harita derleme önbelleği ──────────────────────────────────────────────
 # tools/fetch_terrain.py ve geocode*.py bunları yeniden üretir.
 tools/data/tiles/
-tools/data/elev.npz
+# Yükseklik ızgaraları: fetch_terrain.py ile ~25 saniyede yeniden iner,
+# depoda tutmanın anlamı yok (üçü birden 44 MB).
+tools/data/elev*.npz
 tools/data/*.html
 tools/data/*.txt
 tools/data/*.pdf
