@@ -3,6 +3,7 @@ import type { MapKind } from '../core/geo.ts';
 import type { Theatre } from '../data/theatres.ts';
 import { newGame } from './scenario.ts';
 import { newWorldGame } from './world-scenario.ts';
+import { newDetailedGame } from './detailed-scenario.ts';
 
 /**
  * Tiyatro kurulumu — bir cephenin hangi harita ve hangi senaryoyla
@@ -54,10 +55,15 @@ export function setupFor(th: Theatre): TheatreSetup {
       mapKind: own,
       brand: extra.brand ?? th.name.toLocaleUpperCase('tr-TR'),
       ...(extra.focus ? { focus: extra.focus } : {}),
-      briefing: true,
-      // Çanakkale'nin elle yazılmış senaryosu var: tabyalar, mayın hatları,
-      // muharebe düzeni. Diğer ayrıntılı haritalar şimdilik yok.
-      makeGame: (side) => newGame(side),
+      briefing: own === 'canakkale',
+      // Çanakkale'nin elle yazılmış senaryosu var: tabyalar, mayın
+      // hatları, muharebe düzeni, brifing kartı. Diğer ayrıntılı
+      // haritalar toprağı ve ikmal merkezini harita verisinden,
+      // teşkilâtı cephe paketinden alır.
+      makeGame:
+        own === 'canakkale'
+          ? (side) => newGame(side)
+          : (side) => newDetailedGame(side, WORLD_SEED, th),
     };
   }
   return {
