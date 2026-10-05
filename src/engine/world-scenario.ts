@@ -191,6 +191,7 @@ const TEMPLATE_FOR_WW2: Record<string, string> = {
   Australia: 'uk_ww2_piyade',
   'New Zealand': 'uk_ww2_piyade',
   'Union of South Africa': 'uk_ww2_piyade',
+  'Chinese warlords': 'cn_piyade_tumen',
   Belgium: 'uk_ww2_piyade',
   Netherlands: 'uk_ww2_piyade',
   Norway: 'uk_ww2_piyade',
@@ -212,10 +213,9 @@ function slug(s: string): string {
 }
 
 function buildWorldSetup(th: Theatre): WorldSetup {
-  // Cephenin elle yazılmış tarihsel içeriği varsa, onun kapsadığı ULUSLAR
-  // için prosedürel tümen üretimi atlanır.
+  // Cephenin elle yazılmış tarihsel içeriği varsa, o birlikler adıyla
+  // kurulur; ulusun kadrosunun geri kalanı yine üretilir.
   const pack = FRONT_PACKS[th.id];
-  const scripted = new Set((pack?.formations ?? []).map((f) => f.nation));
   const byNation = groupByNation(th);
   // Paket birlikleri ulus sınırına bakmaz: koordinat hangi kara iline
   // düşüyorsa oraya konur (Stange Müfrezesi Arhavi'de, 3. Kafkas Avcı
@@ -330,9 +330,22 @@ function buildWorldSetup(th: Theatre): WorldSetup {
     const nation = tpl.nation;
     const arrives = spec.joins ? Math.max(0, dayOf(spec.joins, th.start)) : 0;
 
-    // Pakette geçen ulusun KARA birlikleri tarihsel listeden gelir; donanma
-    // yine üretilir (paketler şimdilik kara teşkilâtı taşıyor).
-    const procedural = scripted.has(spec.id) ? [] : placeDivisions(spec, list, hostile);
+    // Pakette geçen ulusun ADLI birlikleri tarihsel listeden gelir; geri
+    // kalan kadrosu yine üretilir.
+    //
+    // Hata: pakette tek bir birliği olan ulusun BÜTÜN prosedürel üretimi
+    // kapanıyordu. Pasifik'te Japonya'nın 60 tümeni var, pakette 7 birlik
+    // yazılı — Mihver bütün cepheye 7 birlikle çıkıyor, karşısındaki
+    // Sovyetler 180 tümenle duruyordu. Adlı birlik eklemek orduyu
+    // küçültmemeli.
+    const scriptedCount = (pack?.formations ?? []).filter(
+      (f) => f.nation === spec.id,
+    ).length;
+    const remaining = Math.max(0, spec.divisions - scriptedCount);
+    const procedural =
+      remaining > 0
+        ? placeDivisions({ ...spec, divisions: remaining }, list, hostile)
+        : [];
     procedural.forEach((home, i) => {
       const id = `${spec.id.slice(0, 10).replace(/\W/g, '')}_d${i}`;
       landUnits[id] = {

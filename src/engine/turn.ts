@@ -327,12 +327,19 @@ function resolveLandPhase(state: GameState, rng: Rng): CombatReport[] {
   const out: CombatReport[] = [];
 
   // Taarruz emirlerini hedef ile göre grupla.
+  //
+  // Hedef KOMŞU ya da birliğin DURDUĞU il olabilir. İkincisi köprübaşı
+  // taarruzudur: karaya çıkan birlik düşmanla aynı ilin içindedir,
+  // komşusunda değil. Yalnız komşu kabul edildiği için köprübaşı hiç
+  // saldıramıyor, ada sonsuza kadar düşmanda kalıyordu — Pasifik'te 150
+  // turda 293 çıkarma yapılıyor ve tek bir ada el değiştirmiyordu.
   const attacks = new Map<ProvinceId, { side: Side; units: LandUnit[] }>();
   for (const u of Object.values(state.landUnits)) {
     if (u.embarkedIn || u.strength <= 0) continue;
     if (u.order?.kind !== 'taarruz' || !u.order.target) continue;
     const target = u.order.target;
-    if (!prov(u.location).neighbours.includes(target)) continue;
+    const beachhead = target === u.location;
+    if (!beachhead && !prov(u.location).neighbours.includes(target)) continue;
     const slot = attacks.get(target);
     if (slot) {
       if (slot.side === u.side) slot.units.push(u);
@@ -437,6 +444,22 @@ function retreat(state: GameState, units: LandUnit[], from: ProvinceId): void {
   }
 }
 
+/**
+ * Bir sahile BİR GÜNDE çıkarılabilecek cephe genişliği.
+ *
+ * Çıkarmanın asıl sınırı düşman değil, sahilin kendisidir: kaç çıkarma
+ * aracı aynı anda kıyıya yanaşabilir. Bu olmadan oyuncu bütün orduyu tek
+ * günde karaya yığıp köprübaşı sorununu yok sayıyordu — oysa Gelibolu'da
+ * da Normandiya'da da savaşın şekli ilk gün karaya ÇIKARILAMAYAN kuvvet
+ * yüzünden belirlendi.
+ *
+ * Arazinin muharebe genişliğinin yarısı: dar bir koy bir tümen, geniş bir
+ * kumsal üç tümen alır.
+ */
+function landingWidth(terrainWidth: number): number {
+  return Math.max(6, terrainWidth / 2);
+}
+
 function resolveLandings(state: GameState, rng: Rng): CombatReport[] {
   const out: CombatReport[] = [];
   const byTarget = new Map<ProvinceId, LandUnit[]>();
@@ -449,20 +472,45 @@ function resolveLandings(state: GameState, rng: Rng): CombatReport[] {
     else byTarget.set(u.order.target, [u]);
   }
 
-  for (const [target, units] of byTarget) {
+  for (const [target, waiting] of byTarget) {
     const p = prov(target);
     const st = state.provinces[target]!;
-    const side = units[0]!.side;
+    const side = waiting[0]!.side;
+
+    // ── Dalga: sahile sığan kadarı bu gün çıkar ────────────────────
+    // Örgütü en sağlam olan önce çıkar; geri kalan gemide kalır ve
+    // emrini korur, ertesi gün ikinci dalga olur.
+    const sorted = [...waiting].sort((a, b) => b.organisation - a.organisation);
+    const cap = landingWidth(TERRAINS[p.terrain].combatWidth);
+    const units: LandUnit[] = [];
+    let used = 0;
+    for (const u of sorted) {
+      const w = templateStats(u.templateId).width;
+      if (used + w > cap && units.length > 0) continue;
+      units.push(u);
+      used += w;
+    }
+    const held = sorted.length - units.length;
+
     const defenders = Object.values(state.landUnits).filter(
       (d) => d.location === target && d.side !== side && !d.embarkedIn && d.strength > 0,
     );
 
     const mods = commanderMods(state, units[0]!.commanderId);
     const support = navalSupportFor(state, side, target);
+    const air = airSupportFor(state, side, target);
     const lines: string[] = [
-      `${units.length} birlik ${p.name} sahiline çıkıyor.`,
-      support > 0 ? `Deniz topçusu desteği ${support.toFixed(0)}.` : 'Deniz topçusu desteği yok.',
+      `${units.length} birlik ${p.name} sahiline çıkıyor (sahil kapasitesi ${cap.toFixed(0)}).`,
     ];
+    if (held > 0) {
+      lines.push(`${held} birlik sahile sığmadı — gemide, ikinci dalgada.`);
+    }
+    lines.push(
+      support > 0
+        ? `Deniz topçusu desteği ${support.toFixed(0)}.`
+        : 'Deniz topçusu desteği yok.',
+    );
+    if (air > 0) lines.push(`Hava desteği ${air.toFixed(0)}.`);
     const losses = {
       ottoman: { men: 0, ships: 0, guns: 0 },
       entente: { men: 0, ships: 0, guns: 0 },
@@ -474,10 +522,23 @@ function resolveLandings(state: GameState, rng: Rng): CombatReport[] {
       const s = templateStats(d.templateId);
       defFire += s.defence * (d.strength / d.maxStrength) * (1 + d.entrenchment * 0.1);
     }
-    const shield = 1 / (1 + support / 400);
+    // Tahkimat çıkarmada kara muharebesinden AĞIR basar: betona gömülü
+    // makineli, kumsalda açıktaki bölüğü biçer. Eskiden `fortLevel`
+    // çıkarmada hiç okunmuyordu; tahkimli sahil ile boş kumsal aynıydı.
+    const fortMul = 1 + st.fortLevel * 0.35;
+    if (st.fortLevel > 0) {
+      lines.push(
+        `Sahil tahkimatı ${st.fortLevel} → savunan ateşi ×${fortMul.toFixed(2)}.`,
+      );
+    }
+    // Kayıp tavanı tahkimatla yükselir. Sabit %40 tavanda 2. seviye
+    // tahkimat tavanı zaten doyuruyor, 4. seviye hiçbir şey eklemiyordu:
+    // betonarme sahil ile tel örgülü sahil aynı kayıbı veriyordu.
+    const lossCap = Math.min(0.75, 0.4 + st.fortLevel * 0.09);
+    const shield = 1 / (1 + (support + air) / 400);
     for (const u of units) {
       const hit = Math.round(
-        u.strength * Math.min(0.4, defFire * 0.0009) * shield * rng.jitter(0.4) *
+        u.strength * Math.min(lossCap, defFire * fortMul * 0.0009) * shield * rng.jitter(0.4) *
           (1 - mods.amphibious),
       );
       u.strength = Math.max(0, u.strength - hit);

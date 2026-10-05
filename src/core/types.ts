@@ -48,6 +48,7 @@ export type Nation =
   | 'japon'
   | 'anzac'
   | 'hint'
+  | 'cinli'
   | 'newfoundland';
 
 export const SIDE_OF_NATION: Record<Nation, Side> = {
@@ -70,6 +71,7 @@ export const SIDE_OF_NATION: Record<Nation, Side> = {
   fransiz: 'entente',
   anzac: 'entente',
   hint: 'entente',
+  cinli: 'entente',
   newfoundland: 'entente',
 };
 

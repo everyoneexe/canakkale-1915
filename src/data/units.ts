@@ -522,6 +522,14 @@ export const TEMPLATES: readonly DivisionTemplate[] = [
     battalions: { piyade: 6, makineli: 2, sahra_topcu: 3 },
   },
   {
+    id: 'cn_piyade_tumen',
+    name: 'Çin Piyade Tümeni',
+    nation: 'cinli',
+    // Kalabalık ama topçusuz: Çin tümeninin sorunu insan değil, ateş
+    // gücü ve tanksavar yokluğuydu.
+    battalions: { piyade: 12, makineli: 2, sahra_topcu: 1 },
+  },
+  {
     id: 'it_zirhli_tumen',
     name: 'İtalyan Zırhlı Tümeni',
     nation: 'italyan',
