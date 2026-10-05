@@ -78,7 +78,9 @@ export const THEATRES: readonly Theatre[] = [
       + 'Manş\'tan İsviçre\'ye kadar dondu ve dört yıl kıpırdamadı.',
     start: '1914-08-04',
     end: '1918-11-11',
-    bbox: [-4, 44, 13.5, 53.5],
+    // Kutu kuzey İtalya ve Avusturya'yı içine alınca o ülkeler prosedürel
+    // tümenle doluyor ve Batı Cephesi İtalyan tümenleriyle kaynıyordu.
+    bbox: [-5, 45.5, 10, 54],
     pin: [3.5, 49.5],
     sides: { a: 'Almanya', b: 'Fransa · Britanya · Belçika' },
     src: WWI_KEY,

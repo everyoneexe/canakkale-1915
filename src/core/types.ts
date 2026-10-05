@@ -37,6 +37,15 @@ export type Nation =
   | 'ingiliz'
   | 'fransiz'
   | 'rus'
+  | 'avusturya'
+  | 'italyan'
+  | 'sirp'
+  | 'bulgar'
+  | 'belcika'
+  | 'amerikan'
+  | 'sovyet'
+  | 'polonyali'
+  | 'japon'
   | 'anzac'
   | 'hint'
   | 'newfoundland';
@@ -48,6 +57,15 @@ export const SIDE_OF_NATION: Record<Nation, Side> = {
   // cephelerinde taraf ulus künyesinden gelir; aynı ulus savaşa göre
   // taraf değiştirebilir (İtalya 1914/1915, Japonya 1914/1941).
   rus: 'entente',
+  avusturya: 'ottoman',
+  italyan: 'entente',
+  sirp: 'entente',
+  bulgar: 'ottoman',
+  belcika: 'entente',
+  amerikan: 'entente',
+  sovyet: 'entente',
+  polonyali: 'entente',
+  japon: 'entente',
   ingiliz: 'entente',
   fransiz: 'entente',
   anzac: 'entente',
