@@ -32,29 +32,82 @@ from scipy.spatial import cKDTree
 from skimage import measure, segmentation
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-ELEV = os.path.join(ROOT, "tools", "data", "elev.npz")
 PLACES = os.path.join(ROOT, "tools", "data", "places.json")
-OUT_JSON = os.path.join(ROOT, "src", "data", "map.json")
-OUT_PNG = os.path.join(ROOT, "public", "relief.png")
 
-Z = 12
-# Çalışma ızgarası için altörnekleme adımı (1 = tam çözünürlük ~29 m/px).
-STEP = 2
-# Çokgen sadeleştirme toleransı (metre).
-SIMPLIFY_M = 70.0
-# Kıyı halkası sadeleştirme toleransı (metre) — çizim için daha ince.
-COAST_SIMPLIFY_M = 35.0
-# Bu kadar hücreden küçük kıyı halkaları atılır (kayalıklar).
-MIN_RING_CELLS = 220
-# İki il arasında komşuluk için gereken asgari temas pikseli.
-MIN_CONTACT = 6
-# Tiyatro sınırı: bir tohuma bu mesafeden uzak hücreler haritaya girmez.
-# Trakya ve Anadolu içlerinin tek bir dev ile yutulmasını engeller.
-THEATRE_RADIUS_M = 20000.0
+# ─────────────────────────────────────────────────────────── bölgeler ─────
+# Her ayrıntılı tiyatro kendi yükseklik ızgarasından derlenir. Sayılar
+# ÖLÇEĞE bağlıdır: Çanakkale 60 km'lik bir boğaz, Kafkas 450 km'lik bir dağ
+# cephesi. Aynı sadeleştirme toleransı ve tiyatro yarıçapı ikisine birden
+# uymaz.
+#
+# Çanakkale değerleri birebir korundu: `python3 tools/build_map.py` aynı
+# haritayı yeniden üretir.
+REGIONS: dict[str, dict] = {
+    "canakkale": dict(
+        elev="elev.npz", z=12, step=2,
+        simplify_m=70.0, coast_simplify_m=35.0,
+        min_ring_cells=220, min_contact=6,
+        theatre_radius_m=20000.0,
+        origin=(26.40, 40.15),        # boğazın ortası
+        out_json="map.json", out_png="relief.png",
+        seeds="seeds_canakkale",
+    ),
+    "kafkas": dict(
+        elev="elev-kafkas.npz", z=10, step=1,
+        simplify_m=900.0, coast_simplify_m=600.0,
+        min_ring_cells=160, min_contact=4,
+        theatre_radius_m=70000.0,
+        origin=(41.90, 40.30),        # Sarıkamış-Erzurum ekseninin ortası
+        out_json="map-kafkas.json", out_png="relief-kafkas.png",
+        seeds="seeds_kafkas",
+    ),
+    "mezopotamya": dict(
+        elev="elev-mezopotamya.npz", z=10, step=1,
+        simplify_m=1100.0, coast_simplify_m=700.0,
+        min_ring_cells=160, min_contact=4,
+        theatre_radius_m=90000.0,
+        origin=(45.90, 32.10),        # Dicle-Fırat arası, Kut hizası
+        out_json="map-mezopotamya.json", out_png="relief-mezopotamya.png",
+        seeds="seeds_mezopotamya",
+    ),
+    "sina": dict(
+        elev="elev-sina.npz", z=10, step=1,
+        simplify_m=900.0, coast_simplify_m=600.0,
+        min_ring_cells=160, min_contact=4,
+        theatre_radius_m=80000.0,
+        origin=(34.30, 31.20),        # Gazze-Birüssebi ekseni
+        out_json="map-sina.json", out_png="relief-sina.png",
+        seeds="seeds_sina",
+    ),
+}
 
-# Yerel izdüşüm merkezi — boğazın ortası.
-LON0, LAT0 = 26.40, 40.15
+# main() bunları seçilen bölgeden doldurur.
+ELEV = OUT_JSON = OUT_PNG = ""
+Z = STEP = MIN_RING_CELLS = MIN_CONTACT = 0
+SIMPLIFY_M = COAST_SIMPLIFY_M = THEATRE_RADIUS_M = 0.0
+LON0 = LAT0 = 0.0
+SEEDS: list[dict] = []
 M_PER_DEG_LAT = 110574.0
+
+
+def select_region(name: str) -> None:
+    """Modül düzeyindeki ölçek sabitlerini seçilen bölgeye göre doldurur."""
+    global ELEV, OUT_JSON, OUT_PNG, Z, STEP, SIMPLIFY_M, COAST_SIMPLIFY_M
+    global MIN_RING_CELLS, MIN_CONTACT, THEATRE_RADIUS_M, LON0, LAT0, SEEDS
+    cfg = REGIONS[name]
+    ELEV = os.path.join(ROOT, "tools", "data", cfg["elev"])
+    OUT_JSON = os.path.join(ROOT, "src", "data", cfg["out_json"])
+    OUT_PNG = os.path.join(ROOT, "public", cfg["out_png"])
+    Z = cfg["z"]
+    STEP = cfg["step"]
+    SIMPLIFY_M = cfg["simplify_m"]
+    COAST_SIMPLIFY_M = cfg["coast_simplify_m"]
+    MIN_RING_CELLS = cfg["min_ring_cells"]
+    MIN_CONTACT = cfg["min_contact"]
+    THEATRE_RADIUS_M = cfg["theatre_radius_m"]
+    LON0, LAT0 = cfg["origin"]
+    mod = __import__(cfg["seeds"])
+    SEEDS = mod.SEEDS
 
 
 def y2lat(y: float, z: int) -> float:

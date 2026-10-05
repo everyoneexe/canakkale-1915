@@ -19,6 +19,11 @@ import {
 import { THEATRES } from '../src/data/theatres.ts';
 import { newWorldGame } from '../src/engine/world-scenario.ts';
 import { issueLandOrder } from '../src/engine/orders.ts';
+import { FRONT_PACKS } from '../src/data/fronts/index.ts';
+import { TEMPLATE_BY_ID } from '../src/data/units.ts';
+import { TRAITS } from '../src/data/commanders.ts';
+import { NATIONS } from '../src/data/world1914.ts';
+import { NATIONS_WW2 } from '../src/data/world1939.ts';
 
 /**
  * Bu dosyadaki her test, geliştirme sırasında FİİLEN yaşanmış bir hatayı
@@ -94,6 +99,62 @@ describe('tarihsel veri bütünlüğü', () => {
       if (!f.approx) continue;
       assert.ok(f.posNote && f.posNote.length > 40, `${f.id} posNote eksik`);
     }
+  });
+
+  it('cephe paketlerindeki bütün başvurular gerçek', () => {
+    // Paket verisi METİNLE başvuruyor: şablon kimliği, ulus kimliği,
+    // komutan özelliği. Hiçbirini tsc denetleyemez ve üçü de sessizce
+    // bozulur: bilinmeyen şablon tur ortasında istisna atar, aralık dışı
+    // olay HİÇ ateşlenmez, bilinmeyen özellik hiçbir şey yapmaz.
+    // Bu test yazıldığında üç gerçek hata yakaladı.
+    const ww1 = new Set(NATIONS.map((n) => n.id));
+    const ww2 = new Set(NATIONS_WW2.map((n) => n.id));
+    const sorun: string[] = [];
+
+    for (const p of Object.values(FRONT_PACKS)) {
+      const th = THEATRES.find((t) => t.id === p.theatre);
+      assert.ok(th, `paket kayıtsız tiyatroya bağlı: ${p.theatre}`);
+      const uluslar = th!.war === 'ww2' ? ww2 : ww1;
+
+      for (const f of p.formations) {
+        if (!TEMPLATE_BY_ID[f.templateId]) {
+          sorun.push(`${p.theatre}: bilinmeyen şablon ${f.templateId} (${f.name})`);
+        }
+        if (!uluslar.has(f.nation)) {
+          sorun.push(`${p.theatre}: bilinmeyen ulus ${f.nation} (${f.name})`);
+        }
+        if (f.arrivesOn && (f.arrivesOn < th!.start || f.arrivesOn > th!.end)) {
+          sorun.push(`${p.theatre}: ${f.name} cephe dışında varıyor (${f.arrivesOn})`);
+        }
+      }
+      for (const c of p.commanders) {
+        for (const t of c.traits) {
+          if (!TRAITS[t]) sorun.push(`${p.theatre}: bilinmeyen özellik ${t} (${c.name})`);
+        }
+      }
+      for (const e of p.events) {
+        if (e.date < th!.start || e.date > th!.end) {
+          sorun.push(`${p.theatre}: ${e.id} cephe dışında (${e.date}, ${th!.start}..${th!.end})`);
+        }
+        if (!e.src) sorun.push(`${p.theatre}: ${e.id} kaynaksız`);
+      }
+    }
+    assert.deepEqual(sorun, []);
+  });
+
+  it('komutan kimlikleri bütün cephelerde benzersiz', () => {
+    // Aynı kişi birden çok cephede olabilir (Rommel üç cephede) ama
+    // kimlikler çakışırsa komutan kaydı sessizce üzerine yazılır.
+    const gorulen = new Map<string, string>();
+    const cakisan: string[] = [];
+    for (const p of Object.values(FRONT_PACKS)) {
+      for (const c of p.commanders) {
+        const onceki = gorulen.get(c.id);
+        if (onceki) cakisan.push(`${c.id}: ${onceki} ve ${p.theatre}`);
+        else gorulen.set(c.id, p.theatre);
+      }
+    }
+    assert.deepEqual(cakisan, []);
   });
 });
 

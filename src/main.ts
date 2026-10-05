@@ -276,12 +276,17 @@ class Game {
     const box = $('mod-aciklama');
     const key = (c: string, text: string, line = false) =>
       `<li><i class="${line ? 'cizgi' : ''}" style="background:${c}"></i>${text}</li>`;
-    // Taraf adları ve renkleri PALETTEN gelir; sabit yazılırsa tema
-    // değişince sessizce yalan söyler.
+    // Taraf adları ve renkleri PALETTEN ve TİYATRODAN gelir; sabit
+    // yazılırsa tema ya da cephe değişince sessizce yalan söyler.
+    //
+    // Hata: gösterge her cephede "Osmanlı / İtilaf" yazıyordu. Kuzey
+    // Afrika'da üst bar "ALMANYA · İTALYA" derken hemen altındaki harita
+    // göstergesi "Osmanlı denetiminde" diyordu.
     const hex = (n: number) => `#${n.toString(16).padStart(6, '0')}`;
     const ott = this.state?.playerSide === 'ottoman';
-    const own = ott ? 'Osmanlı' : 'İtilaf';
-    const foe = ott ? 'İtilaf' : 'Osmanlı';
+    const kisalt = (s: string) => (s.length > 22 ? `${s.slice(0, 21)}…` : s);
+    const own = kisalt(ott ? this.theatre.sides.a : this.theatre.sides.b);
+    const foe = kisalt(ott ? this.theatre.sides.b : this.theatre.sides.a);
     const ownC = hex(ott ? C.ottomanDim : C.ententeDim);
     const foeC = hex(ott ? C.ententeDim : C.ottomanDim);
 
@@ -735,8 +740,9 @@ class Game {
     if (!o) return;
     $('son-baslik').textContent =
       o.winner === this.state.playerSide ? 'ZAFER' : 'YENİLGİ';
+    // Galibin adı da cepheden gelmeli: Pasifik'te "Osmanlı galip" yazıyordu.
     $('son-govde').textContent = `${o.reason}\n\n${
-      o.winner === 'ottoman' ? 'Osmanlı' : 'İtilaf'
+      o.winner === 'ottoman' ? this.theatre.sides.a : this.theatre.sides.b
     } galip — ${formatDate(this.state.date)}.`;
     $('son-katman').hidden = false;
   }
