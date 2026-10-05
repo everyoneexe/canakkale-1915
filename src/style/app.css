@@ -686,54 +686,9 @@ body {
   gap: 10px;
   margin-top: 26px;
 }
+/* Dar ekranda taraf seçimi tek sütun: iki sütunda düğme metni kırılıyor. */
 @media (max-width: 640px) {
-  .senaryo-sec {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin-top: 24px;
-}
-@media (max-width: 640px) {
-  .senaryo-sec {
-    grid-template-columns: 1fr;
-  }
-}
-
-.senaryo {
-  padding: 13px 15px;
-  border: 1px solid var(--edge);
-  background: #08090b;
-  text-align: left;
-  cursor: pointer;
-}
-.senaryo:hover {
-  border-color: var(--accent-dim);
-}
-.senaryo[aria-pressed='true'] {
-  border-color: var(--accent);
-  background: #140f04;
-}
-.sn-ad {
-  display: block;
-  font-family: var(--mono);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  color: var(--text-dim);
-  margin-bottom: 5px;
-}
-.senaryo[aria-pressed='true'] .sn-ad {
-  color: var(--accent);
-}
-.sn-alt {
-  display: block;
-  font-family: var(--mono);
-  font-size: 10.5px;
-  line-height: 1.5;
-  color: var(--text-faint);
-}
-
-.taraf-sec {
+  .taraf-sec {
     grid-template-columns: 1fr;
   }
 }
@@ -994,15 +949,40 @@ body {
   padding: 13px 14px;
 }
 
+/* Dar ekran açılış yerleşimi — tablet ve telefon ortak.
+
+   Eski hâli üç satırlı bir ızgaraydı ve panellere `max-height: 32vh`
+   veriyordu: 844 piksellik bir telefonda 270 piksel, yani on cepheden
+   üçü. Geri kalanı kutudan taşıp küreye ve açıklamaya biniyordu.
+   Kaydırma kutusu panelde değil SAYFADA olmalı. */
 @media (max-width: 1100px) {
   .acilis {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr auto;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
   }
   .acilis-sol,
   .acilis-detay {
     border: 0;
-    max-height: 32vh;
+    max-height: none;
+    overflow: visible;
+    flex: 0 0 auto;
+  }
+  /* Oyuncu önce cepheyi görmeli; küre karar verdikten sonra bakılan süs. */
+  .acilis-sol {
+    order: 1;
+  }
+  .acilis-detay {
+    order: 2;
+  }
+  .acilis-kure {
+    order: 3;
+    flex: 0 0 auto;
+    height: 40vw;
+    min-height: 200px;
+    max-height: 340px;
   }
 }
 
@@ -1283,4 +1263,216 @@ body {
 .kayit-satir.soluk {
   color: var(--text-faint);
   font-style: italic;
+}
+
+/* ═══════════════════════════════════════════ mobil ve dokunmatik ═════
+
+   Arayüz masaüstü için yazılmıştı: açılış ekranı 330px + 1fr + 340px'lik
+   üç sütunlu bir ızgaraydı, yani 390 piksellik bir telefonda 670 piksel
+   sabit sütun. Sonuç yalnız "dar" değil, KULLANILAMAZdı: küre tuvali
+   `inset: 0` ile cephe listesinin üstüne biniyor ve düğmeleri tıklanamaz
+   hâle getiriyordu. Telefonda oyun başlatmak mümkün değildi.
+
+   Yaklaşım: masaüstü yerleşimine dokunulmaz; dar ekranda panelleri
+   ALT SAYFAya, mod düğmelerini yatay şeride indiririz.                */
+
+/* Çentik ve ev çubuğu payı. */
+:root {
+  --guvenli-ust: env(safe-area-inset-top, 0px);
+  /* Mobil "TURU BİTİR" düğmesinin genişliği. Mod şeridi bu kadar pay
+     bırakır; ikisi birbirinden kaymasın diye tek değişken. */
+  --tur-dugme-g: 148px;
+  --guvenli-alt: env(safe-area-inset-bottom, 0px);
+}
+
+/* Dar EKRAN ya da ALÇAK ekran. Yatay tutulan bir telefon 844x390'dır:
+   genişlik eşiğini aşar ama masaüstü yerleşimi 390 piksellik yüksekliğe
+   sığmaz — dikey mod sütunu günlüğün altında kalıyordu. */
+@media (max-width: 760px), (max-height: 520px) {
+  /* Açılış yerleşimi 1100px bloğunda; burada yalnız çentik payı. */
+  .acilis {
+    padding-top: var(--guvenli-ust);
+    padding-bottom: var(--guvenli-alt);
+  }
+
+  /* ── Üst bar: iki satır ──────────────────────────────────────────── */
+  #ustbar {
+    height: auto;
+    min-height: 54px;
+    flex-wrap: wrap;
+    padding-top: var(--guvenli-ust);
+  }
+  .marka {
+    padding: 8px 12px;
+  }
+  .marka-ana {
+    font-size: 15px;
+  }
+  .tarih-blok {
+    padding: 8px 12px;
+  }
+  /* Ölçüler ikinci satıra tam genişlikte geçer ve yatay kaydırılır:
+     sekiz ölçüyü 390 piksele sığdırmanın başka yolu yok. */
+  .olculer {
+    order: 10;
+    flex: 1 0 100%;
+    gap: 16px;
+    padding: 6px 12px;
+    border-top: 1px solid var(--edge);
+    -webkit-overflow-scrolling: touch;
+  }
+  /* "TURU BİTİR" en sık basılan düğme; başparmakla erişilsin diye sağ
+     alta sabitlenir. Genişliği DEĞİŞKENE bağlı: mod şeridi aynı
+     değişkenden pay bırakıyor, yoksa ikisi birbirine giriyor (ilk
+     denemede 170 piksellik düğmeye 128 piksel pay bırakılmış ve DENİZ
+     ile MAYIN düğmeleri altında kalmıştı). */
+  .tur-bitir {
+    position: fixed;
+    right: 12px;
+    bottom: calc(12px + var(--guvenli-alt));
+    z-index: 24;
+    width: var(--tur-dugme-g);
+    /* Temel kuralda `min-width: 170px` var ve `width`i eziyordu; şerit
+       o yüzden hâlâ düğmenin altında kalıyordu. content-box ile de
+       148px'lik düğme 172px çiziliyor. */
+    min-width: 0;
+    box-sizing: border-box;
+    min-height: 52px;
+    padding: 0 12px;
+    justify-content: center;
+    border: 1px solid var(--accent);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6);
+  }
+  .tb-alt {
+    display: none; /* "Boşluk" kısayolu telefonda yok */
+  }
+
+  /* ── Alt kat: üç katmanlı yığın ──────────────────────────────────
+     Alttan yukarı:  TURU BİTİR (sağ alt, z 24)
+                     mod şeridi (tam genişlik, onun üstünde, z 22)
+                     alt sayfa  (şeridin üstünde, z 18/26)
+     İlk denemede şerit düğmenin yanına konmuştu: 390 piksellik ekranda
+     geriye 208 piksel kalıyor, beş mod düğmesi sığmıyor ve DENİZ ile
+     MAYIN yatay kaydırmanın arkasında görünmez oluyordu. Kendi satırına
+     alınca beşi de sığıyor. */
+  .modlar {
+    top: auto;
+    bottom: calc(74px + var(--guvenli-alt));
+    left: 10px;
+    right: 10px;
+    flex-direction: row;
+    gap: 3px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    z-index: 22;
+  }
+  .modlar::-webkit-scrollbar {
+    display: none;
+  }
+  .mod {
+    width: auto;
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 44px;
+    padding: 8px 4px;
+    text-align: center;
+    font-size: 10px;
+  }
+  /* Mod açıklaması masaüstünde modların yanında; telefonda haritanın
+     yarısını kapatıyor. */
+  .mod-aciklama {
+    display: none;
+  }
+
+  .panel,
+  .gunluk {
+    left: 0;
+    right: 0;
+    width: auto;
+    /* Şeridin üstünde dur: 74 + 44 düğme + 8 boşluk. */
+    bottom: calc(126px + var(--guvenli-alt));
+    top: auto;
+    max-height: 44vh;
+    border-left: none;
+    border-right: none;
+    border-radius: 10px 10px 0 0;
+    /* Masaüstünde panel %93 saydam ve altındaki harita hoş duruyor.
+       Telefonda alt sayfa ekranın yarısı: harita etiketleri metnin
+       arasından geçip okumayı bozuyordu. Burada tamamen opak. */
+    background: #050608;
+    padding-bottom: 14px;
+    box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.55);
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .panel {
+    z-index: 26;
+  }
+  .gunluk {
+    max-height: 30vh;
+    z-index: 18;
+  }
+
+  /* ── Olay kartı ──────────────────────────────────────────────────── */
+  .olay {
+    width: auto;
+    max-width: none;
+    margin: 0 12px;
+    max-height: 80vh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  /* Brifing kartı telefonda ekrandan uzun: içerik 972 piksel, kart 675.
+     "DEVAM" kartın dibinde kalıyor ve oyuncu kart İÇİNDE kaydırması
+     gerektiğini anlamıyordu — oyun kilitlenmiş gibi görünüyor. Düğme
+     kartın altına yapışır. */
+  .olay-secenek {
+    position: sticky;
+    bottom: 0;
+    margin: 0 -18px -18px;
+    padding: 12px 18px calc(12px + var(--guvenli-alt));
+    background: linear-gradient(180deg, rgba(10, 11, 13, 0), rgba(10, 11, 13, 0.97) 28%);
+  }
+  .olay-secenek button {
+    min-height: 48px;
+  }
+}
+
+/* Dokunmatik: hover diye bir şey yok. Fare ipucu kutusu parmakla asla
+   kapanmıyor ve haritanın yarısını örtüyordu. */
+@media (hover: none) {
+  .ipucu {
+    display: none;
+  }
+  /* Dokunma hedefi en az 44px. */
+  .mod,
+  .mini,
+  .cephe,
+  .savas,
+  .taraf,
+  .birincil,
+  .emir {
+    min-height: 44px;
+  }
+  /* Tarayıcının kendi çift-dokunuş yakınlaştırması devrede olmasın:
+     harita ve küre kendi pinch mantığını çalıştırıyor. */
+  #harita,
+  #kure,
+  .kure-overlay {
+    touch-action: none;
+  }
+}
+
+/* Cihaza göre ipucu. Telefonda "Tekerlek: yakınlaştır" yazıyordu. */
+.ipucu-dokunma {
+  display: none;
+}
+@media (hover: none) {
+  .ipucu-fare {
+    display: none;
+  }
+  .ipucu-dokunma {
+    display: inline;
+  }
 }

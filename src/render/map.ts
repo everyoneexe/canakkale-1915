@@ -14,6 +14,7 @@ import {
   dist,
   gameMap,
   mapKind,
+  mapLoaded,
   metaOf,
   prov,
   provinceAt,
@@ -628,15 +629,40 @@ export class MapView {
     return { minX: minX - padX, minY: minY - padY, maxX: maxX + padX, maxY: maxY + padY };
   }
 
+  /**
+   * Haritayı ekrana sığdır.
+   *
+   * Kenar payları arayüz kromuna göredir ve KROM EKRANA GÖRE DEĞİŞİR:
+   * masaüstünde solda mod sütunu, sağda 352 piksellik panel var;
+   * telefonda ikisi de alt sayfaya iniyor ve yatayda pay kalmıyor.
+   * Sabit 520 piksellik yatay pay 390 piksellik bir telefonda NEGATİF
+   * ölçek üretiyor, harita avuç içi kadar kalıyordu.
+   */
   private fitToMap(keepZoom = false): void {
-    const b = this.theatreBox();
+    // Küre ekranındayken harita yüklü değil: `resize` olayı (telefonu
+    // çevirmek) buraya düşüp "harita yüklenmedi" diye patlıyordu.
+    if (!mapLoaded()) return;
+
     const sw = this.app.screen.width;
     const sh = this.app.screen.height;
-    const fit = Math.min((sw - 520) / (b.maxX - b.minX), (sh - 110) / (b.maxY - b.minY));
-    this.fitZoom = fit;
-    if (!keepZoom) this.zoom = fit;
-    this.panX = (sw - 340) / 2 + 150 - ((b.minX + b.maxX) / 2) * this.zoom;
-    this.panY = (sh + 62) / 2 - ((b.minY + b.maxY) / 2) * this.zoom;
+    const dar = sw < 760;
+    const yatay = dar ? 24 : 520;
+    const ust = dar ? 92 : 62;
+    const alt = dar ? 72 : 48;
+
+    const b = this.theatreBox();
+    const fit = Math.min(
+      (sw - yatay) / (b.maxX - b.minX),
+      (sh - ust - alt) / (b.maxY - b.minY),
+    );
+    this.fitZoom = Math.max(fit, 1e-6);
+    if (!keepZoom) this.zoom = this.fitZoom;
+    // Yatayda kullanılabilir alanın ortası: masaüstünde sağdaki panel
+    // kadar sola kaydırılır, telefonda tam orta.
+    const merkezX = dar ? sw / 2 : (sw - 340) / 2 + 150;
+    const merkezY = (ust + (sh - alt)) / 2;
+    this.panX = merkezX - ((b.minX + b.maxX) / 2) * this.zoom;
+    this.panY = merkezY - ((b.minY + b.maxY) / 2) * this.zoom;
     this.applyTransform();
   }
 
@@ -707,6 +733,74 @@ export class MapView {
       },
       { passive: false }
     );
+
+    // ── İki parmakla yakınlaştırma ────────────────────────────────
+    // Telefonda tekerlek yok: pinch olmadan harita HİÇ yakınlaştırılamaz
+    // ve 4.575 illik dünya haritası okunmaz bir leke olarak kalır.
+    // `touch-action: none` ile tarayıcının kendi yakınlaştırması kapalı,
+    // yani bu işi biz yapmak zorundayız.
+    const dokunan = new Map<number, { x: number; y: number }>();
+    let pinchMesafe = 0;
+
+    const mesafe = (): number => {
+      const [a, b] = [...dokunan.values()];
+      if (!a || !b) return 0;
+      return Math.hypot(a.x - b.x, a.y - b.y);
+    };
+    const orta = (): { x: number; y: number } => {
+      const [a, b] = [...dokunan.values()];
+      if (!a || !b) return { x: 0, y: 0 };
+      return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    };
+
+    canvas.addEventListener('pointerdown', (e) => {
+      if (e.pointerType !== 'touch') return;
+      dokunan.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (dokunan.size === 2) {
+        pinchMesafe = mesafe();
+        // Pinch başlayınca sürükleme iptal: yoksa harita aynı anda
+        // hem kayar hem yakınlaşır ve parmağın altından kaçar.
+        this.dragging = false;
+      }
+    });
+
+    canvas.addEventListener('pointermove', (e) => {
+      if (e.pointerType !== 'touch' || !dokunan.has(e.pointerId)) return;
+      dokunan.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (dokunan.size !== 2 || !this.state) return;
+      const yeni = mesafe();
+      if (pinchMesafe <= 0 || yeni <= 0) return;
+      e.preventDefault();
+
+      const rect = canvas.getBoundingClientRect();
+      const m = orta();
+      const ox = m.x - rect.left;
+      const oy = m.y - rect.top;
+
+      // Tekerlekteki gibi: önce odak noktasının dünya konumunu al, sonra
+      // yakınlaştır, sonra aynı nokta aynı pikselde kalsın diye kaydır.
+      const once = this.toWorld(ox, oy);
+      const lo = this.fitZoom * 0.04;
+      const hi = this.fitZoom * 12;
+      this.zoom = Math.min(hi, Math.max(lo, this.zoom * (yeni / pinchMesafe)));
+      const sonra = this.toWorld(ox, oy);
+      this.panX += (sonra.x - once.x) * this.zoom;
+      this.panY += (sonra.y - once.y) * this.zoom;
+      pinchMesafe = yeni;
+      this.applyTransform();
+      this.draw();
+    }, { passive: false });
+
+    const birak = (e: PointerEvent): void => {
+      if (e.pointerType !== 'touch') return;
+      dokunan.delete(e.pointerId);
+      if (dokunan.size < 2) pinchMesafe = 0;
+      // İki parmaktan birini kaldırınca kalan parmak haritayı
+      // sıçratmasın: sürükleme sıfırdan başlar.
+      if (dokunan.size === 1) this.dragging = false;
+    };
+    canvas.addEventListener('pointerup', birak);
+    canvas.addEventListener('pointercancel', birak);
 
     this.app.stage.on('pointerdown', (e: FederatedPointerEvent) => {
       if (!this.state) return;
