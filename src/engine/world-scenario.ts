@@ -14,6 +14,7 @@ import { freshAiMemory } from '../core/types.ts';
 import { metaOf, provinces, setProvinceValues } from '../core/geo.ts';
 import { TEMPLATE_BY_ID, aggregate } from '../data/units.ts';
 import { NATIONS, WORLD_EVENTS } from '../data/world1914.ts';
+import { FRONT_PACKS } from '../data/fronts/index.ts';
 import type { NationSpec } from '../data/world1914.ts';
 import { NATIONS_WW2 } from '../data/world1939.ts';
 import { THEATRE_BY_ID } from '../data/theatres.ts';
@@ -82,6 +83,16 @@ function groupByNation(th: Theatre): Map<string, Province[]> {
     else out.set(nation, [p]);
   }
   return out;
+}
+
+/**
+ * Seçilen il, ulusun gerçek başkentine yetecek kadar yakın mı.
+ *
+ * 4 derece ≈ 450 km; bir başkentin kendi ilinin bu kadar uzağa düşmesi
+ * ancak haritanın o bölgeyi hiç içermediği anlamına gelir.
+ */
+function nearEnough(p: Province, capital: readonly [number, number]): boolean {
+  return (p.lon - capital[0]) ** 2 + ((p.lat - capital[1]) * 1.4) ** 2 < 16;
 }
 
 function nearestProvince(lon: number, lat: number, pool: readonly Province[]): Province | null {
@@ -156,18 +167,28 @@ const TEMPLATE_FOR: Record<string, string> = {
   'New Zealand': 'anzac_tumen',
   Canada: 'anzac_tumen',
   India: 'hint_tugay',
+  Russia: 'ru_piyade_tumen',
 };
 
-const NATION_OF_TEMPLATE: Record<string, LandUnit['nation']> = {
-  os_piyade_tumen: 'osmanli',
-  fr_piyade_tumen: 'fransiz',
-  uk_piyade_tumen: 'ingiliz',
-  anzac_tumen: 'anzac',
-  hint_tugay: 'hint',
-};
+/** Ad → kimlik parçası. */
+function slug(s: string): string {
+  return s
+    .toLocaleLowerCase('tr')
+    .replace(/[çğıöşü]/g, (c) => ({ ç: 'c', ğ: 'g', ı: 'i', ö: 'o', ş: 's', ü: 'u' })[c]!)
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_|_$/g, '');
+}
 
 function buildWorldSetup(th: Theatre): WorldSetup {
+  // Cephenin elle yazılmış tarihsel içeriği varsa, onun kapsadığı ULUSLAR
+  // için prosedürel tümen üretimi atlanır.
+  const pack = FRONT_PACKS[th.id];
+  const scripted = new Set((pack?.formations ?? []).map((f) => f.nation));
   const byNation = groupByNation(th);
+  // Paket birlikleri ulus sınırına bakmaz: koordinat hangi kara iline
+  // düşüyorsa oraya konur (Stange Müfrezesi Arhavi'de, 3. Kafkas Avcı
+  // Tugayı Tiflis'te).
+  const landPool = provinces().filter((p) => !p.isSea);
   const nationList = nationsFor(th);
   const byId: Record<string, NationSpec> = Object.fromEntries(
     nationList.map((n) => [n.id, n]),
@@ -222,7 +243,11 @@ function buildWorldSetup(th: Theatre): WorldSetup {
     const list = byNation.get(spec.id);
     if (!list || list.length === 0 || !spec.capital) continue;
     const cap = nearestProvince(spec.capital[0], spec.capital[1], list);
-    if (!cap) continue;
+    // Cephe kutusu haritayı kırpıyor: Kafkas Cephesi'nde yalnız 76 il var.
+    // Mesafe sınırı olmadan "Berlin'e en yakın il" Kafkasya'da bir Rus ili
+    // seçiliyor, zafer koşulu da onu Alman başkenti sayıp oyunu üçüncü
+    // günde bitiriyordu. Başkent ancak GERÇEKTEN haritadaysa sayılır.
+    if (!cap || !nearEnough(cap, spec.capital)) continue;
     capitals[spec.id] = cap.id;
     victoryPoints[cap.id] = 25;
     supplyHubs[cap.id] = Math.round(spec.manpower / 6);
@@ -257,10 +282,15 @@ function buildWorldSetup(th: Theatre): WorldSetup {
     const templateId = TEMPLATE_FOR[spec.id] ?? 'os_piyade_tumen';
     const tpl = TEMPLATE_BY_ID[templateId]!;
     const agg = aggregate(tpl);
-    const nation = NATION_OF_TEMPLATE[templateId] ?? 'osmanli';
+    // Çizim ulusu şablonun kendi alanından; elle tutulan ikinci bir
+    // eşleme yeni şablon eklendiğinde sessizce eskiyordu.
+    const nation = tpl.nation;
     const arrives = spec.joins ? Math.max(0, dayOf(spec.joins, th.start)) : 0;
 
-    placeDivisions(spec, list, hostile).forEach((home, i) => {
+    // Pakette geçen ulusun KARA birlikleri tarihsel listeden gelir; donanma
+    // yine üretilir (paketler şimdilik kara teşkilâtı taşıyor).
+    const procedural = scripted.has(spec.id) ? [] : placeDivisions(spec, list, hostile);
+    procedural.forEach((home, i) => {
       const id = `${spec.id.slice(0, 10).replace(/\W/g, '')}_d${i}`;
       landUnits[id] = {
         id,
@@ -283,6 +313,39 @@ function buildWorldSetup(th: Theatre): WorldSetup {
         embarkedIn: arrives > 0 ? 'bekleme' : null,
       };
     });
+
+    // ── Pakette yazılı tarihsel birlikler ──
+    // Prosedürel tümen "Rusya 7. Tümen" diye adlandırılıyordu; burada
+    // gerçek teşkilât gerçek yerine konur.
+    for (const f of (pack?.formations ?? []).filter((x) => x.nation === spec.id)) {
+      const ftpl = TEMPLATE_BY_ID[f.templateId];
+      if (!ftpl) continue;
+      const home = nearestProvince(f.at[0], f.at[1], landPool);
+      if (!home) continue;
+      const fagg = aggregate(ftpl);
+      const fid = `${spec.id.slice(0, 10).replace(/\W/g, '')}_${slug(f.name)}`;
+      const fArrives = f.arrivesOn ? Math.max(0, dayOf(f.arrivesOn, th.start)) : arrives;
+      landUnits[fid] = {
+        id: fid,
+        name: f.name,
+        nation: ftpl.nation,
+        side,
+        templateId: f.templateId,
+        location: home.id,
+        strength: fagg.men,
+        maxStrength: fagg.men,
+        organisation: fagg.organisation,
+        maxOrganisation: fagg.organisation,
+        entrenchment: 1,
+        experience: 10,
+        supplied: 1,
+        commanderId: null,
+        order: null,
+        moveProgress: 0,
+        inCombat: false,
+        embarkedIn: fArrives > 0 ? 'bekleme' : null,
+      };
+    }
 
     // ── Donanma ──
     if (spec.capitalShips + spec.cruisers > 0) {
@@ -385,6 +448,7 @@ export function worldScenario(th: Theatre = DEFAULT_THEATRE): Scenario {
       .map((n) => setup.capitals[n.id]!);
 
   const ww2 = th.war === 'ww2';
+  const pack = FRONT_PACKS[th.id];
   const scenario: Scenario = {
     id: th.id,
     name: th.name,
@@ -399,10 +463,28 @@ export function worldScenario(th: Theatre = DEFAULT_THEATRE): Scenario {
     airWings: [],
     forts: [],
     minefields: [],
-    commanders: [],
+    // CommanderSpec → Commander: `from` ISO tarihi cephe başlangıcına göre
+    // gün indeksine çevrilir.
+    commanders: (pack?.commanders ?? []).map((c) => ({
+      id: c.id,
+      name: c.name,
+      rank: c.rank,
+      side: c.side,
+      nation: c.nation,
+      kind: c.kind,
+      bio: c.bio,
+      skill: c.skill,
+      traits: c.traits,
+      availableFrom: dayOf(c.from, th.start),
+      src: c.src,
+      assignedTo: null,
+    })),
     // Olay metinleri 1. Dünya Savaşı için yazıldı ve cephe tarih aralığına
     // göre süzülür; 2. savaşta cephe açıklaması bilgiyi taşıyor.
-    events: ww2
+    // Paket varsa cepheye özgü olaylar; yoksa genel dünya olayları.
+    events: pack?.events
+      ? pack.events.map((e) => ({ ...e, day: dayOf(e.date, th.start) }))
+      : ww2
       ? []
       : WORLD_EVENTS.filter(
           (e) =>
@@ -440,7 +522,8 @@ export function newWorldGame(
   th: Theatre = DEFAULT_THEATRE,
 ): GameState {
   const setup = buildWorldSetupCached(th);
-  setActiveScenario(worldScenario(th));
+  const sc = worldScenario(th);
+  setActiveScenario(sc);
 
   // İl değerleri Natural Earth verisinde yok; senaryo kurulumundan yazılır.
   for (const [id, vp] of Object.entries(setup.victoryPoints)) {
@@ -472,7 +555,10 @@ export function newWorldGame(
     airWings: {},
     forts: {},
     minefields: {},
-    commanders: {} as Record<string, Commander>,
+    // Cephe paketindeki komutanlar duruma aktarılır; paket yoksa boş.
+    commanders: Object.fromEntries(
+      sc.commanders.map((c) => [c.id, structuredClone(c) as Commander]),
+    ) as Record<string, Commander>,
     sides: structuredClone(WORLD_SIDES) as Record<Side, SideState>,
     reports: [],
     firedEvents: [],

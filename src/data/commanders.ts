@@ -105,7 +105,7 @@ export interface CommanderSpec extends Omit<Commander, 'availableFrom' | 'assign
   readonly why: string;
 }
 
-function cmd(
+export function cmd(
   id: string,
   name: string,
   rank: string,
