@@ -250,7 +250,15 @@ export class Panel {
         ${row('Cephe genişliği', String(stats.width))}
         ${row('Yumuşak saldırı', String(stats.softAttack))}
         ${row('Savunma', String(stats.defence))}
-        ${row('Delme', String(stats.breakthrough))}
+        ${row('Delme (taarruzda koruma)', String(stats.breakthrough))}
+        ${
+          stats.hardness > 0.01 || stats.armour > 0.01
+            ? row('Zırhlı saldırı', stats.hardAttack.toFixed(0)) +
+              row('Zırh', stats.armour.toFixed(1)) +
+              row('Zırh delme', stats.piercing.toFixed(1)) +
+              row('Sertlik', `%${Math.round(stats.hardness * 100)}`)
+            : row('Zırh delme', stats.piercing.toFixed(1))
+        }
         ${row('Top namlusu', String(stats.guns))}
         ${row('Günlük ikmal', `${stats.supplyUse.toFixed(1)} ton`)}
       </div>`;

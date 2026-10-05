@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { before, describe, it } from 'node:test';
 
 import { loadMap, prov, provinceDist, provinces } from '../src/core/geo.ts';
-import { TERRAINS } from '../src/data/units.ts';
+import { aggregate, TERRAINS } from '../src/data/units.ts';
 import { MINEFIELDS } from '../src/data/minefields.ts';
 import { FORTS } from '../src/data/forts.ts';
 import { GUN_BY_ID } from '../src/data/guns.ts';
@@ -11,6 +11,13 @@ import { endTurn } from '../src/engine/turn.ts';
 import { CRIPPLED_HULL, liveShips, minefieldsIn, resolveNavalFire } from '../src/engine/naval.ts';
 import { computeSupply } from '../src/engine/supply.ts';
 import { Rng } from '../src/engine/rng.ts';
+import {
+  effectiveFirepower,
+  pierceFactor,
+  templateStats,
+} from '../src/engine/combat.ts';
+import { THEATRES } from '../src/data/theatres.ts';
+import { newWorldGame } from '../src/engine/world-scenario.ts';
 
 /**
  * Bu dosyadaki her test, geliştirme sırasında FİİLEN yaşanmış bir hatayı
@@ -253,4 +260,145 @@ describe('kampanya', () => {
       }
     }
   });
+
+  it('bir günlük yoldan uzun yürüyüş birkaç günde tamamlanır', () => {
+    // Hata: `moveProgress` birikiyor ama HİÇ KULLANILMIYOR ve 0.95'te
+    // tavanlanıyordu. Günlük yolu (9 km) aşan her adım sonsuza kadar
+    // yarım kalıyordu. Çanakkale'de Gelibolu -> Kireçtepe adımı 74 km
+    // eşdeğer; o yürüyüş hiç bitmiyordu. Dünya haritasında komşular
+    // medyan 65 km olduğu için orada kara birlikleri hiç yürüyemiyordu.
+    const s = newGame('ottoman');
+    const u = Object.values(s.landUnits).find(
+      (x) => x.side === 'ottoman' && !x.embarkedIn,
+    )!;
+    u.location = 'gelibolu';
+    const hedef = 'kirectepe';
+    const km =
+      (provinceDist('gelibolu', hedef) * TERRAINS[prov(hedef).terrain].moveCost) / 1000;
+    assert.ok(km > 9, `adım ${km.toFixed(0)} km — günlük yoldan kısa, hata yakalanmaz`);
+
+    let gun = 0;
+    for (; gun < 25 && u.location !== hedef; gun++) {
+      u.order = { kind: 'yuru', target: hedef, path: [hedef] };
+      endTurn(s);
+    }
+    assert.equal(u.location, hedef, `${gun} günde Gelibolu -> Kireçtepe bitmedi`);
+    // Tek günde ışınlanmamalı: yol gerçekten günlere yayılmalı.
+    assert.ok(gun >= 3, `yürüyüş ${gun} günde bitti — çok hızlı`);
+  });
+});
+
+describe('zırh', () => {
+  it('1915 şablonlarının hiçbirinde zırh yok — zırh kuralı o cepheye hiç dokunmaz', () => {
+    // Zırh/delme eklenirken asıl risk Çanakkale dengesini bozmaktı.
+    for (const id of [
+      'os_piyade_tumen',
+      'os_suvari_tugay',
+      'uk_piyade_tumen',
+      'uk_deniz_tumen',
+      'anzac_tumen',
+      'fr_piyade_tumen',
+    ]) {
+      const s = templateStats(id);
+      assert.equal(s.armour, 0, `${id} zırhlı çıktı`);
+      assert.equal(s.hardness, 0, `${id} sert hedef sayılıyor`);
+    }
+    // Zırhsız savunana karşı delme çarpanı daima tam.
+    assert.equal(pierceFactor(0, 0), 1);
+    assert.equal(pierceFactor(0, 99), 1);
+  });
+
+  it('delme zırhın altına düştükçe ateş yarıya iner, aşınca tam etki eder', () => {
+    assert.equal(pierceFactor(20, 20), 1, 'eşit delme tam etki etmeli');
+    assert.equal(pierceFactor(20, 40), 1, 'fazla delme tam etkiyi aşmamalı');
+    assert.equal(pierceFactor(20, 10), 0.5, 'yarı delme yarı etki');
+    assert.equal(pierceFactor(20, 2), 0.5, 'taban 0.5 altına inmemeli');
+    const mid = pierceFactor(20, 15);
+    assert.ok(mid > 0.5 && mid < 1, `ara değer ${mid}`);
+  });
+
+  it('sert hedefe yumuşak ateş işlemez, zırhlı ateş işler', () => {
+    // Tamamen yumuşak hedef: yalnız softAttack sayılır.
+    assert.equal(effectiveFirepower(100, 10, 0), 100);
+    // Tamamen zırhlı hedef: yalnız hardAttack sayılır.
+    assert.equal(effectiveFirepower(100, 10, 1), 10);
+    // Yarı sert: ikisinin ortası.
+    assert.equal(effectiveFirepower(100, 10, 0.5), 55);
+  });
+
+  it('tanksavarı olmayan 1941 tüfek tümeni T-34 zırhını delemez, 1943 tümeni deler', () => {
+    // Hata sınıfı: delme düz ortalama alınırsa tüfekler tanksavarı yutar ve
+    // hiçbir piyade tümeni tank deleemez; saf "en iyi silah" alınırsa tek
+    // tanksavar taburu koca tank kolordusunu durdurur.
+    const t34 = templateStats('su_tank_kolordu').armour;
+    assert.ok(t34 > 0, 'tank kolordusunun zırhı yok');
+    const yil41 = templateStats('su_tufek_tumen').piercing;
+    const yil43 = templateStats('su_tufek_tumen_43').piercing;
+    assert.ok(yil41 < t34, `1941 tümeni (${yil41}) T-34 zırhını (${t34}) deliyor`);
+    assert.ok(yil43 > t34, `1943 tümeni (${yil43}) T-34 zırhını (${t34}) delemiyor`);
+    assert.ok(
+      pierceFactor(t34, yil41) < pierceFactor(t34, yil43),
+      'tanksavar eklemek hiçbir şeyi değiştirmedi',
+    );
+  });
+
+  it('tümene tek tank taburu eklemek onu zırhlı yapmaz', () => {
+    // Zırh toplanırsa bir tank taburu tümeni yenilmez kılardı; ortalama alınır.
+    const tek = aggregate({
+      id: 'x',
+      name: 'x',
+      nation: 'alman',
+      battalions: { piyade: 9, makineli: 3, tank_orta: 1 },
+    });
+    const saf = aggregate({
+      id: 'y',
+      name: 'y',
+      nation: 'alman',
+      battalions: { tank_orta: 6 },
+    });
+    assert.ok(
+      tek.armour < saf.armour * 0.4,
+      `tek tanklı tümen ${tek.armour}, saf tank ${saf.armour}`,
+    );
+    assert.ok(tek.hardness < 0.3, `sertlik ${tek.hardness}`);
+  });
+});
+
+/**
+ * Dünya haritası testleri EN SONDA: `loadMap` küresel durumu değiştirir,
+ * bundan sonra Çanakkale testleri çalışmaz.
+ */
+describe('dünya haritası', () => {
+  const kafkas = THEATRES.find((t) => t.id === 'ww1_kafkas')!;
+
+  before(async () => {
+    await loadMap('dunya', kafkas.bbox);
+  });
+
+  it('başkenti haritanın dışında kalan cephede de ikmal merkezi var', () => {
+    // Hata: ikincil depolar başkent kontrolünün İÇİNDEydi. Kafkas bbox'ında
+    // ne İstanbul ne Petrograd var, bu yüzden haritada SIFIR ikmal merkezi
+    // kuruluyordu; 21 tarihsel tümenin 20'si beşinci günde %0 ikmaldeydi.
+    const s = newWorldGame('entente', 7, kafkas);
+    const hubs = provinces().filter((p) => p.supplyHub > 0);
+    assert.ok(hubs.length > 0, 'cephede hiç ikmal merkezi yok');
+    const sides = new Set(hubs.map((h) => s.provinces[h.id]?.controller));
+    assert.ok(sides.has('ottoman'), 'Osmanlı tarafının deposu yok');
+    assert.ok(sides.has('entente'), 'Rus tarafının deposu yok');
+  });
+
+  it('pakette yazılı tümenler ikmalsiz kalmıyor', () => {
+    const s = newWorldGame('entente', 7, kafkas);
+    for (let i = 0; i < 5; i++) endTurn(s);
+    const pack = Object.values(s.landUnits).filter(
+      (u) => u.id.startsWith('pk_') && !u.embarkedIn,
+    );
+    assert.ok(pack.length > 10, `paket birliği ${pack.length}`);
+    const dry = pack.filter((u) => u.supplied < 0.1);
+    assert.ok(
+      dry.length < pack.length / 2,
+      `${pack.length} tümenin ${dry.length} tanesi ikmalsiz`,
+    );
+  });
+
 });

@@ -22,8 +22,8 @@ export const WW2_ITALYA_PACK: FrontPack = {
   formations: [
     // ── Mihver ──
     { nation: IT, name: '6. İtalyan Ordusu — Sicilya', templateId: 'it_ww2_piyade', at: [14.02, 37.50], src: IS },
-    { nation: DE, name: 'Hermann Göring Panzer Tümeni', templateId: 'de_panzer', at: [14.50, 37.30], src: IS },
-    { nation: DE, name: '15. Panzergrenadier Tümeni', templateId: 'de_panzer', at: [13.20, 37.70], src: IS },
+    { nation: DE, name: 'Hermann Göring Panzer Tümeni', templateId: 'de_panzer_43', at: [14.50, 37.30], src: IS },
+    { nation: DE, name: '15. Panzergrenadier Tümeni', templateId: 'de_panzer_43', at: [13.20, 37.70], src: IS },
     { nation: DE, name: '10. Ordu — Vietinghoff', templateId: 'de_ww2_piyade', at: [14.80, 40.70], arrivesOn: '1943-08-22', src: IS },
     { nation: DE, name: 'Gustav Hattı — Monte Cassino', templateId: 'de_ww2_piyade', at: [13.81, 41.49], arrivesOn: '1943-11-01', src: IS },
     { nation: DE, name: '1. Fallschirmjäger Tümeni', templateId: 'de_alpen_korps', at: [13.81, 41.49], arrivesOn: '1944-01-15', src: IS },

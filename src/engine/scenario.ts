@@ -175,6 +175,7 @@ function buildLandUnits(): Record<UnitId, LandUnit> {
       commanderId: u.commanderId ?? null,
       order: null,
       moveProgress: 0,
+      marchingTo: null,
       inCombat: false,
       embarkedIn: null,
     };

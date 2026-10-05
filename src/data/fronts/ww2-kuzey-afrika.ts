@@ -26,7 +26,7 @@ export const KUZEY_AFRIKA_PACK: FrontPack = {
   formations: [
     // ── Mihver ──
     { nation: IT, name: '10. İtalyan Ordusu', templateId: 'it_ww2_piyade', at: [25.10, 31.60], src: KA },
-    { nation: IT, name: 'Ariete Zırhlı Tümeni', templateId: 'uk_zirhli_tumen', at: [22.00, 32.10], arrivesOn: '1941-01-24', src: KA },
+    { nation: IT, name: 'Ariete Zırhlı Tümeni', templateId: 'it_zirhli_tumen', at: [22.00, 32.10], arrivesOn: '1941-01-24', src: KA },
     { nation: IT, name: 'Trieste Motorlu Tümeni', templateId: 'it_ww2_piyade', at: [21.00, 32.40], arrivesOn: '1941-08-01', src: KA },
     { nation: DE, name: '15. Panzer Tümeni', templateId: 'de_panzer', at: [20.07, 32.11], arrivesOn: '1941-04-25', src: KA },
     { nation: DE, name: '21. Panzer Tümeni', templateId: 'de_panzer', at: [20.07, 32.11], arrivesOn: '1941-02-12', src: KA },
@@ -44,7 +44,7 @@ export const KUZEY_AFRIKA_PACK: FrontPack = {
     { nation: UK, name: '51. (Highland) Tümeni', templateId: 'uk_ww2_piyade', at: [28.95, 30.84], arrivesOn: '1942-08-01', src: KA },
     // Meşale Harekâtı — batıdan ikinci cephe.
     { nation: US, name: 'II. Amerikan Kolordusu', templateId: 'us_piyade_tumen', at: [-7.60, 33.57], arrivesOn: '1942-11-08', src: KA },
-    { nation: US, name: '1. Zırhlı Tümen', templateId: 'uk_zirhli_tumen', at: [0.13, 35.70], arrivesOn: '1942-11-08', src: KA },
+    { nation: US, name: '1. Zırhlı Tümen', templateId: 'us_zirhli_tumen', at: [0.13, 35.70], arrivesOn: '1942-11-08', src: KA },
   ],
 
   commanders: [
