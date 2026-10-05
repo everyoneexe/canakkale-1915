@@ -1,3 +1,5 @@
+import { BASE_PX_PER_DEG, buildMosaic } from '../render/terrain-mosaic.ts';
+import type { LatLonBox } from '../render/terrain-mosaic.ts';
 import { THEATRES } from '../data/theatres.ts';
 import type { Theatre, WarId } from '../data/theatres.ts';
 
@@ -50,6 +52,11 @@ uniform float uLat0;
 uniform vec3  uSun;
 uniform float uPolMix;
 uniform float uLatLim;
+// Yakınlaştırınca canlı indirilen arazi mozaiği ve kapsadığı kutu
+// (batı, güney, doğu, kuzey — derece). uDetailMix 0 ise doku yok.
+uniform sampler2D uDetail;
+uniform vec4  uDetailBox;
+uniform float uDetailMix;
 
 const float PI = 3.14159265359;
 
@@ -95,6 +102,27 @@ void main() {
 
   // Doku düz haritanın koyu zemini için üretildi; kürede daha parlak olmalı.
   vec3 base = texture(uTerrain, uv).rgb * 2.05;
+
+  // ── Yakınlaştırmada canlı mozaik ──────────────────────────────────
+  // Zemin dokusu 11 px/derece; küreye yaklaşınca bulanıklaşıyor. İndirilen
+  // mozaik kapsadığı kutunun içinde onun yerine geçer. Kenarda sert bir
+  // dikdörtgen kalmasın diye kutu sınırına doğru yumuşak geçiş yapılır;
+  // pay, kutunun kendi boyutunun %4'ü.
+  if (uDetailMix > 0.0) {
+    float lonD = degrees(lon);
+    lonD = lonD - 360.0 * floor((lonD + 180.0) / 360.0);
+    float latD = degrees(lat);
+    float w = uDetailBox.x, s = uDetailBox.y, e = uDetailBox.z, n = uDetailBox.w;
+    float fx = (e - w) * 0.04;
+    float fy = (n - s) * 0.04;
+    float inside =
+      smoothstep(w, w + fx, lonD) * (1.0 - smoothstep(e - fx, e, lonD)) *
+      smoothstep(s, s + fy, latD) * (1.0 - smoothstep(n - fy, n, latD));
+    vec2 duv = vec2((lonD - w) / (e - w), (n - latD) / (n - s));
+    vec3 det = texture(uDetail, duv).rgb * 2.05;
+    base = mix(base, det, inside * uDetailMix);
+  }
+
   vec3 pol = texture(uPolitical, uv).rgb;
   float has = step(0.02, max(pol.r, max(pol.g, pol.b)));
 
@@ -176,6 +204,14 @@ export class Globe {
   private terrain: WebGLTexture | null = null;
   private political: Record<string, WebGLTexture> = {};
   private ready = false;
+  /** Yakınlaştırmada canlı indirilen arazi mozaiği. */
+  private detail: WebGLTexture | null = null;
+  private detailBox: LatLonBox | null = null;
+  private detailKey = '';
+  private detailTimer: number | undefined;
+  /** Son geciktirme hangi görünüm için kuruldu. */
+  private detailPending = '';
+  private detailBusy = false;
 
   private lon0 = 14;
   private lat0 = 32;
@@ -245,11 +281,13 @@ export class Globe {
     for (const n of [
       'uTerrain', 'uPolitical', 'uRes', 'uCentre', 'uRadius',
       'uLon0', 'uLat0', 'uSun', 'uPolMix', 'uLatLim',
+      'uDetail', 'uDetailBox', 'uDetailMix',
     ]) {
       this.loc[n] = gl.getUniformLocation(prog, n);
     }
     gl.uniform1i(this.loc['uTerrain']!, 0);
     gl.uniform1i(this.loc['uPolitical']!, 1);
+    gl.uniform1i(this.loc['uDetail']!, 2);
     gl.uniform1f(this.loc['uLatLim']!, LAT_LIM * D);
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
@@ -370,6 +408,99 @@ export class Globe {
 
   // ───────────────────────────────────────────────────────── çizim ──
 
+  /**
+   * Görünen küre kapağı için canlı arazi mozaiği ister.
+   *
+   * Ortografik kürede ekranda görünen parça, merkez noktası (lat0, lon0)
+   * çevresinde açısal yarıçapı α olan bir KAPAK:
+   *
+   *     α = asin( min(R, yarı-görüntü) / R )
+   *
+   * Kapağın enlem/boylam kutusu standart formülle çıkar; boylam açıklığı
+   * kutuplara yaklaştıkça genişler ve kapak kutbu içeriyorsa tam tura
+   * döner. Çağrı her karede gelir; gerçek iş durulunca bir kez yapılır.
+   */
+  private streamDetail(): void {
+    // Küre kendiliğinden dönerken veya sürüklenirken akış yapma: pencere
+    // her karede kayar, indirilen mozaik daha yüklenmeden bayatlar.
+    if (this.spin || this.dragging) return;
+    const rect = this.cv.getBoundingClientRect();
+    const pxPerDeg = (this.radius * Math.PI) / 180;
+    if (pxPerDeg <= BASE_PX_PER_DEG * 1.3) {
+      if (this.detail) {
+        this.gl.deleteTexture(this.detail);
+        this.detail = null;
+        this.detailBox = null;
+        this.detailKey = '';
+      }
+      return;
+    }
+
+    const half = Math.max(rect.width, rect.height) / 2;
+    const a = (Math.asin(Math.min(1, half / this.radius)) * 180) / Math.PI;
+    const north = Math.min(85, this.lat0 + a);
+    const south = Math.max(-85, this.lat0 - a);
+    // Kapak kutbu içeriyorsa tüm boylamlar görünür.
+    const cosLat = Math.cos((this.lat0 * Math.PI) / 180);
+    const full = Math.abs(this.lat0) + a >= 89 || cosLat < 1e-3;
+    const dLon = full
+      ? 180
+      : Math.min(
+          180,
+          (Math.asin(
+            Math.min(1, Math.sin((a * Math.PI) / 180) / cosLat),
+          ) *
+            180) /
+            Math.PI,
+        );
+    const c = ((this.lon0 + 540) % 360) - 180;
+    const view: LatLonBox = {
+      west: Math.max(-180, c - dLon),
+      east: Math.min(180, c + dLon),
+      south,
+      north,
+    };
+
+    // Geciktirme GÖRÜNÜM DEĞİŞİMİNE bağlı, kareye değil. `draw` saniyede 60
+    // kez çağrılıyor; her karede `clearTimeout` yapılınca zamanlayıcı hiç
+    // ateşlenmiyordu ve tek bir karo bile indirilmiyordu.
+    // Kaba imza: yarım derecelik kayma yeni indirme tetiklemesin.
+    const q = (x: number) => Math.round(x * 2) / 2;
+    const sig = `${q(view.west)},${q(view.south)},${q(view.east)},${q(view.north)},${Math.round(Math.log2(pxPerDeg) * 2)}`;
+    if (sig === this.detailPending) return;
+    this.detailPending = sig;
+    clearTimeout(this.detailTimer);
+    this.detailTimer = window.setTimeout(() => {
+      void this.loadDetail(view, pxPerDeg);
+    }, 240);
+  }
+
+  private async loadDetail(view: LatLonBox, pxPerDeg: number): Promise<void> {
+    if (this.detailBusy) return;
+    this.detailBusy = true;
+    try {
+      const m = await buildMosaic(view, pxPerDeg, this.detailKey);
+      if (!m) return;
+      const gl = this.gl;
+      const tex = gl.createTexture()!;
+      gl.activeTexture(gl.TEXTURE2);
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, m.canvas);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      if (this.detail) gl.deleteTexture(this.detail);
+      this.detail = tex;
+      this.detailBox = { west: m.west, south: m.south, east: m.east, north: m.north };
+      this.detailKey = m.key;
+    } catch (e) {
+      console.error('küre arazi mozaiği yüklenemedi', e);
+    } finally {
+      this.detailBusy = false;
+    }
+  }
+
   private draw(): void {
     const gl = this.gl;
     const dpr = this.cv.width / Math.max(1, this.cv.getBoundingClientRect().width);
@@ -383,13 +514,28 @@ export class Globe {
       gl.bindTexture(gl.TEXTURE_2D, this.terrain);
       gl.activeTexture(gl.TEXTURE1);
       gl.bindTexture(gl.TEXTURE_2D, this.political[this.war] ?? this.terrain);
+      gl.activeTexture(gl.TEXTURE2);
+      gl.bindTexture(gl.TEXTURE_2D, this.detail ?? this.terrain);
+      gl.uniform1f(this.loc['uDetailMix']!, this.detail ? 1 : 0);
+      if (this.detailBox) {
+        const b = this.detailBox;
+        gl.uniform4f(this.loc['uDetailBox']!, b.west, b.south, b.east, b.north);
+      }
+      this.streamDetail();
 
       gl.uniform2f(this.loc['uRes']!, this.cv.width, this.cv.height);
       gl.uniform2f(this.loc['uCentre']!, this.cx * dpr, this.cy * dpr);
       gl.uniform1f(this.loc['uRadius']!, this.radius * dpr);
       gl.uniform1f(this.loc['uLon0']!, this.lon0 * D);
       gl.uniform1f(this.loc['uLat0']!, this.lat0 * D);
-      gl.uniform1f(this.loc['uPolMix']!, 1.0);
+      // Siyasi maske 2048×932 — 5,7 px/derece. Dünya görünümünde doğru
+      // araç ama yakınlaştırınca dev, merdiven kenarlı bloklara dönüşüp
+      // altındaki detaylı araziyi tamamen örtüyor. Küre bir CEPHE SEÇİCİ:
+      // uzakta kim nerede, yakında arazi. Karışım zoom'la söner, tamamen
+      // kaybolmaz — sahiplik yine okunsun.
+      const ppd = (this.radius * Math.PI) / 180;
+      const k = Math.min(1, Math.max(0, Math.log2(ppd / 15) / Math.log2(8)));
+      gl.uniform1f(this.loc['uPolMix']!, 1 - 0.82 * (k * k * (3 - 2 * k)));
 
       // Güneş kameranın hafif sol üstünden: terminatör hep kadrajda kalsın.
       const sl = (this.lon0 + 38) * D;
@@ -501,7 +647,10 @@ export class Globe {
       (e) => {
         e.preventDefault();
         const rect = this.cv.getBoundingClientRect();
-        const max = Math.min(rect.width, rect.height) * 1.6;
+        // Eski tavan min(w,h)×1,6 idi: merkezde yalnız ~26 px/derece, yani
+        // zemin dokusunun iki katı. Yakınlaştırmanın anlamı yoktu. Canlı
+        // mozaik geldiğinden tavan açıldı; ~330 px/derece (~340 m/piksel).
+        const max = Math.min(rect.width, rect.height) * 20;
         this.radius = Math.max(110, Math.min(max, this.radius * Math.exp(-e.deltaY * 0.0012)));
       },
       { passive: false },

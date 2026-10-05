@@ -194,6 +194,29 @@ türetmek hem çalıştı hem de rölyefle %100 tutarlı sonuç verdi.
   enlem/boylam bulunup arazi ve siyasi maske dokuları örneklenir. Tek çizim
   çağrısı. Siyasi maskeler savaş başına eşdikdörtgen WebP (60 KB).
   İğneler üstteki 2D katmanda.
+* **Kürede de karo akışı.** Küre aynı 11 px/derece zemin dokusunu
+  kullanıyordu ve yakınlaştırınca bulanıklaşıyordu — üstelik zoom tavanı
+  `min(w,h) × 1,6` ile merkezde yalnız ~26 px/dereceydi, yani yaklaşmanın
+  anlamı yoktu. Tavan `× 20`'ye açıldı (~330 px/derece) ve harita ile **aynı**
+  `terrain-mosaic` üreticisi küreyi de besler; mozaik üçüncü doku olarak
+  bindirilir, kapsadığı kutunun içinde zemin dokusunun yerine geçer.
+  Kenarda sert dikdörtgen kalmasın diye kutu sınırına doğru kutu boyunun
+  %4'ü kadar yumuşak geçiş var.
+
+  Görünen parça, merkez (lat0, lon0) çevresinde açısal yarıçapı
+  `α = asin(min(R, yarı-görüntü) ÷ R)` olan bir **kapak**; enlem/boylam
+  kutusu bundan çıkar ve kapak kutbu içeriyorsa boylam tam tura döner.
+
+  İki tuzak vardı. (1) Geciktirme her karede sıfırlanıyordu: `draw` saniyede
+  60 kez çağrılıp `clearTimeout` yaptığı için zamanlayıcı hiç ateşlenmedi,
+  tek karo bile inmedi. Geciktirme artık kareye değil **görünüm imzasına**
+  bağlı. (2) Küre kendiliğinden dönerken pencere her karede kayıyor ve inen
+  mozaik yüklenmeden bayatlıyordu; akış yalnız küre durgunken çalışır.
+* **Siyasi maske zoom'la söner.** Maske 5,7 px/derece; dünya görünümünde
+  doğru araç ama yakınlaştırınca merdiven kenarlı dev bloklara dönüşüp
+  altındaki detaylı araziyi tamamen örtüyordu. Küre bir *cephe seçici*:
+  uzakta kim nerede, yakında arazi. Karışım `1 → 0,18` iner, sıfırlanmaz —
+  sahiplik yine okunsun.
 
 Dünya verisi (2,9 MB) **ayrı bir pakete** bölünür ve yalnız bir dünya cephesi
 seçilince indirilir; Çanakkale oynayan hiç indirmez.
