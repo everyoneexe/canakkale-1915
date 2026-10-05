@@ -28,6 +28,31 @@ python3 tools/build_map.py <bolge>       # -> src/data/map-<bolge>.json + public
 `<bolge>`: `canakkale`, `kafkas`, `mezopotamya`, `sina`.
 Bağımlılıklar: `numpy pillow scipy scikit-image`.
 
+Dünya haritası ve küre:
+
+```bash
+python3 tools/world/fetch_natural_earth.py   # il katmanı (38,8 MB)
+python3 tools/world/fetch_world_terrain.py   # dünya yükseklik ızgarası
+python3 tools/world/build_world.py           # -> src/data/world.json
+```
+
+### Depoya NE girer
+
+Depo bir ara 230 MB'a çıkmıştı: ham karo önbelleği (1.538 PNG),
+yükseklik ızgaraları ve Natural Earth il katmanı commit edilmişti.
+Geçmiş temizlendi, depo 23 MB. Kural:
+
+| | depoda | gerekçe |
+| --- | --- | --- |
+| `src/data/map*.json`, `public/relief*.png` | **evet** | üretilmiş ama küçük; zincir yüzlerce MB indirme ister |
+| `src/data/world.json`, `globe.json` | **evet** | aynı |
+| `tools/**/tiles/`, `*.npz` | hayır | ham önbellek, betikle saniyeler içinde iner |
+| `ne_10m_admin_1_states_provinces.geojson` | hayır | 38,8 MB, kamu malı, `fetch_natural_earth.py` indirir |
+| `world_1914/1938.geojson` | **evet** | 1-2 MB, elle türetilmiş, indirme adresi yok |
+
+Yeni bir büyük ikili dosya eklemeden önce: **türetilebilir mi?** Evetse
+`.gitignore`'a yaz ve onu üreten betiği ekle.
+
 ---
 
 ## Mimari
