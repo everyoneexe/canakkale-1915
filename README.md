@@ -300,6 +300,41 @@ Etiketler yalnız hatların birbirinden ayrıldığı yakınlıkta çıkar: Dar
 Boğaz'da 11 hat 1,4 km'ye sıkışıyor, kampanya kadrajında 11 etiket üst üste
 binip okunmaz bir yığın oluyordu.
 
+## Oyun ne öğretiyor
+
+Üç kanal var ve üçü de aynı tarihsel kısıtı anlatıyor.
+
+**1 · Açılış brifingi** (`data/briefing.ts`). Oyuncu haritaya bırakılıp
+"TURU BİTİR" deniyordu; ne durumda olduğu ve mekaniğin hangi kısıta
+dayandığı hiçbir yerde yazmıyordu. Doğru modellenmiş ama anlatılmamış bir
+kısıt öğretmez. Her taraf için ayrı kart: Osmanlı'ya üç halkalı döngü
+(tabya → tarayıcı → mayın), İtilaf'a aynı döngünün tersten görünüşü.
+
+**2 · Nedensellik gösteren günlük.** Rapor satırları sonucu değil sebebi
+yazar:
+
+```
+Kepez Önü — mayın tarama
+  Tarama kapasitesi 56 · akıntı 3,5 kn (×0,36)
+  11 tabya hâlâ ateş ediyor — sivil mürettebat çalışmıyor (×0,05)
+  Hiç mayın temizlenemedi.
+```
+
+Kampanyanın tamamı bu üç satırda: tarayıcılar silahsız balıkçı teknesiydi,
+mürettebatı sivildi, boğazın akıntısı 9 knotlık tekneyi neredeyse yerinde
+sayduruyordu. Çarpanlar motordan geliyor, metin için uydurulmuyor.
+
+**3 · Tıklanabilir künye.** Tabya, komutan ve mayın hattı panelleri tarihsel
+notu ve KAYNAK BAĞLANTISINI gösterir. Mayın hatlarında döken gemi, dökülme
+tarihi ve derinlik de var; `≈` işareti hat başına sayının kaynaklarda hat
+hat verilmediğini, yalnız 11. Hat'ın (Nusret, 26 mayın) kesin olduğunu
+söyler.
+
+Günlükte aynı gün + aynı il + aynı başlıklı raporlar `×N` ile tek kayda
+katlanır, önemli satırlar (mayına çarpma, batan gemi) öne alınır. Önceden
+tek turda üç kez aynı düello satırı çıkıyor, yirmi tur sonra asıl olaylar
+gömülüyordu.
+
 ## Mimari
 
 ```

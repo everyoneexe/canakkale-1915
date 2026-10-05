@@ -198,3 +198,7 @@ export const SUB_NET = {
   movedToNarrows: '1915-07-01',
   src: COMU,
 } as const;
+
+/** Kimlikten künyeye — panel tarihsel ayrıntıyı buradan okur. */
+export const MINEFIELD_BY_ID: Readonly<Record<string, MinefieldSpec>> =
+  Object.fromEntries(MINEFIELDS.map((m) => [m.id, m]));

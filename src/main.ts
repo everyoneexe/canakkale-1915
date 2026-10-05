@@ -1,5 +1,6 @@
 import './style/app.css';
 import type {
+  CombatReport,
   GameState,
   HistoricalEvent,
   LandOrderKind,
@@ -11,6 +12,7 @@ import { loadMap, prov, provinces } from './core/geo.ts';
 import type { MapKind } from './core/geo.ts';
 import { WEATHERS } from './data/units.ts';
 import { C } from './style/tokens.ts';
+import { briefingFor } from './data/briefing.ts';
 import { formatDate, newGame, setActiveScenario } from './engine/scenario.ts';
 import { newWorldGame } from './engine/world-scenario.ts';
 import { SIDE_LABEL_WORLD } from './data/world1914.ts';
@@ -218,6 +220,17 @@ class Game {
       this.view.focusInstant(side === 'ottoman' ? 'd_dar_bogaz' : 'd_bogaz_agzi');
     }
     this.view.introSweep();
+
+    // Açılış brifingi. Oyuncu haritaya bırakılıp "TURU BİTİR" deniyordu;
+    // ne durumda olduğu ve mekaniğin hangi kısıta dayandığı hiçbir yerde
+    // yazmıyordu. Doğru modellenmiş ama anlatılmamış kısıt öğretmez.
+    if (useOwnMap) {
+      this.eventQueue = [
+        briefingFor(side, this.state.day, this.state.date),
+        ...this.eventQueue,
+      ];
+      this.showNextEvent();
+    }
   }
 
 
@@ -584,23 +597,75 @@ class Game {
     $<HTMLButtonElement>('tur-bitir').disabled = s.outcome !== null;
   }
 
+  /**
+   * Günlük.
+   *
+   * Aynı ildeki tabya düellosu her gemi grubu için ayrı rapor üretiyordu:
+   * tek turda üç kez "Boğaz Ağzı — tabya düellosu" satırı çıkıyor, yirmi
+   * tur sonra ekran birbirinin aynı kayıtlarla doluyordu. Aynı gün + aynı
+   * il + aynı başlık tek kayda katlanır, kaç kez olduğu sayıyla verilir.
+   * Asıl olaylar (mayın çarpması, batan gemi) böylece gömülmez.
+   */
   private renderLog(): void {
     const list = $('gunluk-liste');
-    const reports = this.state.reports.slice(0, 60);
-    if (reports.length === 0) {
+    if (this.state.reports.length === 0) {
       list.innerHTML = `<div class="kayit"><div class="kayit-satir">
         Henüz rapor yok. Emirleri ver ve turu bitir.</div></div>`;
       return;
     }
-    list.innerHTML = reports
+
+    // Raporlar oyun durumunun parçası; burada KOPYA üzerinde çalışılır.
+    // Satırları yerinde biriktirmek render'ı duruma yazan bir yan etki
+    // yapardı ve kayıtlar her çizimde şişerdi.
+    interface LogEntry {
+      readonly report: CombatReport;
+      readonly lines: string[];
+      count: number;
+    }
+    const merged: LogEntry[] = [];
+    const seen = new Map<string, LogEntry>();
+    for (const r of this.state.reports) {
+      const key = `${r.day}|${r.province}|${r.title}`;
+      const hit = seen.get(key);
+      if (!hit) {
+        const entry: LogEntry = { report: r, lines: [...r.lines], count: 1 };
+        seen.set(key, entry);
+        merged.push(entry);
+        if (merged.length >= 40) break;
+        continue;
+      }
+      hit.count++;
+      // Tekrar eden kaydın ÖZGÜN satırlarını koru: biri "mayına çarptı"
+      // diyorsa o satır kaybolmamalı.
+      for (const l of r.lines) if (!hit.lines.includes(l)) hit.lines.push(l);
+    }
+
+    // Satırları ÖNEME göre sırala. Birleşmiş bir düello kaydında dört adet
+    // "1 tabya menzilde · donanma ateşi 130" satırı, aralarındaki tek
+    // "mayına çarptı" satırını kesme sınırının altına itiyordu.
+    // 'temizlenemedi' BİLEREK dışarıda: tarama raporunda öğretici olan şey
+    // sonuç değil, nedensellik zinciri (kapasite → akıntı → tabya ateşi →
+    // sonuç). Onu öne çekmek zinciri tersine çeviriyordu.
+    const KEY = /mayına çarp|batt|hasarl|savaş dışı|çekil|ele geçir|şehit/i;
+    for (const e of merged) {
+      e.lines.sort((a, b) => Number(KEY.test(b)) - Number(KEY.test(a)));
+    }
+
+    list.innerHTML = merged
       .map(
-        (r) => `<div class="kayit ${r.kind}" data-il="${r.province}">
-        <div class="kayit-bas"><span>${esc(r.title)}</span>
+        ({ report: r, lines, count }) =>
+          `<div class="kayit ${r.kind}" data-il="${r.province}">
+        <div class="kayit-bas"><span>${esc(r.title)}${count > 1 ? ` ×${count}` : ''}</span>
           <span class="kayit-gun">g${r.day}</span></div>
-        ${r.lines
+        ${lines
           .slice(0, 4)
           .map((l) => `<div class="kayit-satir">${esc(l)}</div>`)
           .join('')}
+        ${
+          lines.length > 4
+            ? `<div class="kayit-satir soluk">+${lines.length - 4} satır daha</div>`
+            : ''
+        }
       </div>`,
       )
       .join('');
