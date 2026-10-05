@@ -74,7 +74,7 @@ class Game {
 
     this.globe = new Globe($<HTMLCanvasElement>('kure'), {
       onHover: () => {},
-      onPick: (th) => this.selectTheatre(th),
+      onPick: (th) => this.selectTheatre(th, true),
     });
     this.globe.setWar('ww1');
     this.globe.start();
@@ -114,13 +114,13 @@ class Game {
       b.innerHTML =
         `<span class="cp-ad">${esc(th.name)}</span>` +
         `<span class="cp-alt">${esc(th.tagline)}</span>`;
-      b.addEventListener('click', () => this.selectTheatre(th));
+      b.addEventListener('click', () => this.selectTheatre(th, true));
       box.appendChild(b);
     }
   }
 
   /** Bir cepheyi seç: küreyi döndür, sağ paneli doldur. */
-  private selectTheatre(th: Theatre): void {
+  private selectTheatre(th: Theatre, kullanici = false): void {
     this.theatre = th;
     if (this.globe) {
       this.globe.selected = th;
@@ -147,7 +147,7 @@ class Game {
     // oyuncu bir cepheye basıyor, ekranda hiçbir şey değişmiyor ve oyunun
     // nasıl başlatılacağını bulamıyordu. Taraf düğmeleri 844 piksellik bir
     // telefonda 1052'inci pikseldeydi. Seçimden sonra oraya kaydırılır.
-    if (window.matchMedia('(max-width: 1100px)').matches) {
+    if (kullanici && window.matchMedia('(max-width: 1100px)').matches) {
       $('acilis-detay').scrollIntoView({
         behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches
           ? 'auto'
