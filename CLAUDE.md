@@ -197,6 +197,24 @@ bu ölçümlerden çıktı.
 
 ---
 
+## Mobil
+
+Yerleşim kırılma noktası: `@media (max-width: 760px), (max-height: 520px)`.
+İkinci koşul şart — yatay tutulan telefon 844x390'dır, genişlik eşiğini
+aşar ama masaüstü kromu 390 piksellik yüksekliğe sığmaz.
+
+- Ekran altını üç şey paylaşır. Sıra: `TURU BİTİR` (z 24, sağ alt) →
+  mod şeridi (z 22, tam genişlik, 74 px yukarıda) → alt sayfa (z 18/26,
+  126 px yukarıda). Bir şey eklerken bu yığını boz**ma**.
+- `TURU BİTİR` genişliği `--tur-dugme-g` değişkeninde. Temel kuralda
+  `min-width: 170px` var ve `width`i eziyor; mobilde `min-width: 0`
+  yazmayı unutma.
+- `fitToMap()` kenar paylarını ekrandan türetir. Masaüstünde 520 px yatay
+  pay ayrılıyor (sol sütun + sağ panel); telefonda bu NEGATİF ölçek
+  üretiyordu.
+- Dokunmada hover yok: `.ipucu` gizlenir. Harita ve küre kendi
+  pinch mantığını çalıştırır (`touch-action: none`).
+
 ## Bilinen tuzaklar
 
 - `newGame('ottoman')` demek **oyuncu Osmanlı** demektir; yapay zekâ

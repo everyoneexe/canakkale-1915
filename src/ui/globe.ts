@@ -679,6 +679,46 @@ export class Globe {
       },
       { passive: false },
     );
+
+    // İki parmakla yakınlaştırma — telefonda tekerlek yok ve küre
+    // başlangıç boyutunda kalıyor; küçük cephe iğneleri ayırt edilemiyor.
+    const dokunan = new Map<number, { x: number; y: number }>();
+    let pinch = 0;
+    const mesafe = (): number => {
+      const [a, b] = [...dokunan.values()];
+      return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0;
+    };
+    el.addEventListener('pointerdown', (e) => {
+      if (e.pointerType !== 'touch') return;
+      dokunan.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (dokunan.size === 2) {
+        pinch = mesafe();
+        // Pinch sırasında döndürme olmasın; küre parmağın altından kaçıyor.
+        this.dragging = false;
+      }
+    });
+    el.addEventListener(
+      'pointermove',
+      (e) => {
+        if (e.pointerType !== 'touch' || !dokunan.has(e.pointerId)) return;
+        dokunan.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (dokunan.size !== 2) return;
+        const yeni = mesafe();
+        if (pinch <= 0 || yeni <= 0) return;
+        e.preventDefault();
+        this.radius = this.clampRadius(this.radius * (yeni / pinch));
+        pinch = yeni;
+      },
+      { passive: false },
+    );
+    const birak = (e: PointerEvent): void => {
+      if (e.pointerType !== 'touch') return;
+      dokunan.delete(e.pointerId);
+      if (dokunan.size < 2) pinch = 0;
+      if (dokunan.size === 1) this.dragging = false;
+    };
+    el.addEventListener('pointerup', birak);
+    el.addEventListener('pointercancel', birak);
   }
 
   private hitTest(x: number, y: number): Theatre | null {

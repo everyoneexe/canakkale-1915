@@ -22,7 +22,7 @@ import { newWorldGame } from '../src/engine/world-scenario.ts';
 import { issueLandOrder } from '../src/engine/orders.ts';
 import { FRONT_PACKS } from '../src/data/fronts/index.ts';
 import { TEMPLATE_BY_ID } from '../src/data/templates.ts';
-import { TRAITS } from '../src/data/commanders.ts';
+import { COMMANDERS, TRAITS } from '../src/data/commanders.ts';
 import { NATIONS } from '../src/data/world1914.ts';
 import { NATIONS_WW2 } from '../src/data/world1939.ts';
 
@@ -156,6 +156,26 @@ describe('tarihsel veri bütünlüğü', () => {
       }
     }
     assert.deepEqual(cakisan, []);
+  });
+
+  it('komutan adı rütbeyi TEKRARLAMAZ', () => {
+    // Arayüz komutanı `${rank} ${name}` diye basıyor. İki kayıtta rütbe
+    // hem `name` hem `rank` alanındaydı ve panelde "Yüzbaşı Yüzbaşı
+    // Hakkı Bey" yazıyordu.
+    const RUTBE = [
+      'Mareşal', 'Orgeneral', 'Korgeneral', 'Tümgeneral', 'Tuğgeneral',
+      'General', 'Amiral', 'Koramiral', 'Tümamiral', 'Visamiral', 'Albay',
+      'Yarbay', 'Binbaşı', 'Yüzbaşı', 'Üsteğmen', 'Teğmen', 'Kaymakam',
+      'Miralay', 'Ferik', 'Müşir', 'Komodor',
+    ];
+    const hepsi = [
+      ...COMMANDERS,
+      ...Object.values(FRONT_PACKS).flatMap((p) => p.commanders),
+    ];
+    const tekrar = hepsi
+      .filter((c) => RUTBE.some((r) => c.name.startsWith(`${r} `)))
+      .map((c) => `${c.rank} ${c.name}`);
+    assert.deepEqual(tekrar, []);
   });
 });
 

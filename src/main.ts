@@ -142,6 +142,19 @@ class Game {
     const src = $<HTMLAnchorElement>('ad-kaynak');
     src.href = th.src;
     src.textContent = th.src;
+
+    // Dar ekranda cephe açıklaması ve TARAF SEÇİMİ listenin ALTINDA kalır;
+    // oyuncu bir cepheye basıyor, ekranda hiçbir şey değişmiyor ve oyunun
+    // nasıl başlatılacağını bulamıyordu. Taraf düğmeleri 844 piksellik bir
+    // telefonda 1052'inci pikseldeydi. Seçimden sonra oraya kaydırılır.
+    if (window.matchMedia('(max-width: 1100px)').matches) {
+      $('acilis-detay').scrollIntoView({
+        behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches
+          ? 'auto'
+          : 'smooth',
+        block: 'start',
+      });
+    }
   }
 
 

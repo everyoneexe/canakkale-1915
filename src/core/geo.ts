@@ -110,6 +110,13 @@ function current(): LoadedMap {
   return loaded;
 }
 
+/**
+ * Harita yüklendi mi. Çizim katmanı küre ekranındayken de olay alıyor
+ * (telefonu çevirmek `resize` üretiyor) ve harita yokken `prov()`
+ * çağıran her yol istisna atıyordu.
+ */
+export const mapLoaded = (): boolean => loaded !== null;
+
 export const mapKind = (): MapKind => current().kind;
 
 /** Seçili haritanın tamamı. */

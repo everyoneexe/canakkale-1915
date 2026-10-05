@@ -251,7 +251,7 @@ export const COMMANDERS: readonly CommanderSpec[] = [
     COMU,
   ),
   cmd(
-    'hakki_bey', 'Yüzbaşı Hakkı Bey', 'Yüzbaşı', 'osmanli', 'ottoman', 'deniz',
+    'hakki_bey', 'Hakkı Bey', 'Yüzbaşı', 'osmanli', 'ottoman', 'deniz',
     [3, 4, 6, 4], ['mayin_harbi'], '1914-09-03',
     'Nusret mayın gemisinin kaptanı. 7/8 Mart 1915 gecesi düşman ' +
     'projektörleri altında Erenköy Körfezi\'ne 26 mayını Anadolu kıyısına ' +
@@ -260,7 +260,7 @@ export const COMMANDERS: readonly CommanderSpec[] = [
     COMU, '1915-09-14',
   ),
   cmd(
-    'muzaffer_adil', 'Yüzbaşı Muzaffer (Adil)', 'Yüzbaşı', 'osmanli', 'ottoman', 'deniz',
+    'muzaffer_adil', 'Muzaffer (Adil)', 'Yüzbaşı', 'osmanli', 'ottoman', 'deniz',
     [4, 4, 3, 3], ['top_atisi'], '1915-01-01',
     'Barbaros Hayrettin zırhlısının komutanı. 6 Mart 1915\'te HMS Queen ' +
     'Elizabeth ile ateş teatisine girip hasar verdirdi.',

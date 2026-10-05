@@ -620,6 +620,23 @@ Netlify / GitHub Pages / herhangi bir statik barındırıcı da çalışır — 
 gereken `dist/` klasörünü servis etmek. `vite.config.ts` içinde `base: './'`
 ayarlı olduğu için alt dizinde barındırma da sorunsuz.
 
+## Mobil
+
+Telefon ve tablette oynanır. Dar (≤760 px) **ya da** alçak (≤520 px, yatay
+tutulan telefon) ekranda yerleşim değişir:
+
+- açılış tek sütuna iner, küre listenin altında sabit yükseklikli bir şerit
+  olur — oyuncu önce cepheyi görür;
+- panel ve günlük alt sayfaya, harita modları kendi tam genişlikli satırına,
+  `TURU BİTİR` sağ alta sabit düğmeye iner;
+- haritada **iki parmakla yakınlaştırma** vardır (telefonda tekerlek yok,
+  onsuz harita hiç yakınlaştırılamıyordu);
+- fare ipucu kutusu kapatılır, dokunma hedefleri en az 44 px olur,
+  çentik ve ev çubuğu için `env(safe-area-inset-*)` payı bırakılır.
+
+Doğrulandı: 360×780, 390×844, 430×932, 768×1024, 844×390 (yatay) ve
+1440×900'de çakışma yok, yatay taşma yok, konsol hatası yok.
+
 ## Yol haritası
 
 Katkıya açık, önem sırasına göre:
@@ -639,7 +656,6 @@ Katkıya açık, önem sırasına göre:
 - [ ] **Denizaltı harbi.** AE2, E11, E14, Muavenet-i Milliye, U-21 — hepsi
       olay metinlerinde var ama oynanabilir sistem değil.
 - [ ] **Ses.** Yok.
-- [ ] **Mobil / dokunmatik.** Arayüz masaüstü için tasarlandı.
 - [ ] **İngilizce yerelleştirme.** Metinler şu an kodun içinde gömülü Türkçe.
 
 ## Ayrıntılı tiyatrolar
