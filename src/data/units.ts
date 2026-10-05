@@ -240,6 +240,64 @@ export const TEMPLATES: readonly DivisionTemplate[] = [
     nation: 'rus',
     battalions: { suvari: 6, makineli: 1 },
   },
+  // ── Avusturya-Macaristan ─────────────────────────────────────────────
+  {
+    id: 'at_piyade_tumen',
+    name: 'Avusturya-Macar Piyade Tümeni',
+    nation: 'avusturya',
+    battalions: { piyade: 12, makineli: 2, sahra_topcu: 5, istihkam: 1 },
+  },
+  {
+    id: 'at_dag_tugay',
+    name: 'Avusturya-Macar Dağ Tugayı',
+    nation: 'avusturya',
+    battalions: { avci: 5, makineli: 2, sahra_topcu: 1 },
+  },
+  // ── Alman (kara) ─────────────────────────────────────────────────────
+  {
+    id: 'de_piyade_tumen',
+    name: 'Alman Piyade Tümeni',
+    nation: 'alman',
+    battalions: { piyade: 12, makineli: 3, sahra_topcu: 6, obus: 2, istihkam: 2 },
+  },
+  {
+    id: 'de_alpen_korps',
+    name: 'Alman Dağ Kolordusu',
+    nation: 'alman',
+    battalions: { avci: 8, makineli: 3, sahra_topcu: 3, istihkam: 1 },
+  },
+  // ── İtalyan ──────────────────────────────────────────────────────────
+  {
+    id: 'it_piyade_tumen',
+    name: 'İtalyan Piyade Tümeni',
+    nation: 'italyan',
+    battalions: { piyade: 12, makineli: 2, sahra_topcu: 4, istihkam: 1 },
+  },
+  {
+    id: 'it_alpini_tugay',
+    name: 'Alpini Tugayı',
+    nation: 'italyan',
+    battalions: { avci: 6, makineli: 2, sahra_topcu: 1 },
+  },
+  // ── Sırp / Bulgar / Belçika ──────────────────────────────────────────
+  {
+    id: 'rs_piyade_tumen',
+    name: 'Sırp Piyade Tümeni',
+    nation: 'sirp',
+    battalions: { piyade: 12, makineli: 2, sahra_topcu: 3 },
+  },
+  {
+    id: 'bg_piyade_tumen',
+    name: 'Bulgar Piyade Tümeni',
+    nation: 'bulgar',
+    battalions: { piyade: 16, makineli: 2, sahra_topcu: 4, istihkam: 1 },
+  },
+  {
+    id: 'be_piyade_tumen',
+    name: 'Belçika Piyade Tümeni',
+    nation: 'belcika',
+    battalions: { piyade: 9, makineli: 2, sahra_topcu: 3 },
+  },
   // ── Fransız ──────────────────────────────────────────────────────────
   {
     id: 'fr_piyade_tumen',
