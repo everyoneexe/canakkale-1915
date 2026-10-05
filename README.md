@@ -155,27 +155,28 @@ türetmek hem çalıştı hem de rölyefle %100 tutarlı sonuç verdi.
 * **Rölyef**: gölgelendirme **Python'da** yapılıp WebP olarak paketlenir.
   Tarayıcıda 7,6 milyon pikseli boyamak saniyeler sürüyordu ve PNG 10 MB
   geliyordu; ön gölgelendirilmiş WebP 550 KB.
-* **Çözünürlük kademeleri (LOD)**: tek bir dünya dokusu 11 px/derece, yani
-  ~10 km/piksel — tiyatronun dışında yakınlaştırınca bulanık bir leke.
-  `tools/world/build_lod.py` terrarium karolarından iki ara kademe üretir;
-  kaba → ince sırayla üst üste serilir, **en ince veri kazanır**:
+* **Çözünürlük kademeleri (LOD)**: kaba → ince üst üste serilir,
+  **en ince veri kazanır**:
 
   | kademe | çözünürlük | kapsam | nasıl |
   | --- | --- | --- | --- |
-  | `world-relief` | 11 px/° (~10 km) | tüm dünya | paket |
-  | `lod-region` | 91 px/° (~1,2 km) | Osmanlı coğrafyası | paket, 2,0 MB |
-  | `lod-near` | 364 px/° (~305 m) | Ege + Marmara | paket, 1,1 MB |
+  | `world-relief` | 11 px/° (~10 km) | tüm dünya | paket, zemin |
   | tiyatro | ~2900 px/° (~29 m) | Çanakkale | paket, tarayıcıda boyanır |
-  | akan karo | ~5800 px/° (~11 m) | görünen pencere | **canlı indirilir** |
+  | akan karo | 22 – 5800 px/° | görünen pencere | **canlı indirilir** |
 
-* **Karo akışı** (`src/render/tiles.ts`): statik kademeler de bir yerde
-  tükeniyor. Zoom 728 px/dereceyi geçince görünen pencerenin terrarium
-  karoları AWS'den indirilir, **tek mozaiğe** dizilir ve öyle gölgelendirilir
-  — karo başına ayrı sprite yapmak tepe gölgelemesine komşu piksel bırakmaz
-  ve sınırlarda 1 px'lik ızgara çizgileri oluşturur. Mozaik tek doku, tek
-  çizim çağrısı. İş zoom/kaydırma durulduktan 220 ms sonra bir kez yapılır;
-  çözülmüş karolar bellekte tutulur (1400 karo tavanı). Zoom geri çekilince
-  katman kendini temizler.
+* **Karo akışı** (`src/render/tiles.ts`): zemin dokusunun üstüne çıkar çıkmaz
+  (≈15 px/derece) görünen pencerenin terrarium karoları AWS'den indirilir.
+  **Tüm dünyayı** kapsar — bir ara, Ege ve Osmanlı coğrafyası için iki statik
+  kutu paketleniyordu (3,1 MB); dışarıda kalan her yer 10 km/piksel
+  bulanıklıkta kalıyordu. Akış küresel olduğundan o kutular silindi.
+
+  Karolar **tek mozaiğe** dizilip öyle gölgelendirilir — karo başına ayrı
+  sprite yapmak tepe gölgelemesine komşu piksel bırakmaz ve sınırlarda 1
+  px'lik ızgara çizgileri oluşturur. Mozaik tek doku, tek çizim çağrısı.
+  İş zoom/kaydırma durulduktan 220 ms sonra bir kez yapılır. İki tavan var:
+  kenar başına 16 karo ve toplam 6 milyon piksel — gölgelendirme CPU'da,
+  16 milyon piksel saniyeler sürer. Çözülmüş karolar bellekte tutulur
+  (400 karo ≈ 52 MB; 1400'de sekme çöküyordu).
 * **Gölge sertliği** çözünürlükle ölçeklenir ama doğrusal değil. `np.gradient`
   piksel başına Δyükseklik verir; hiç telafi edilmezse aynı yamaç ince
   kademede sönük çıkar. Tam telafi ters uca savurur: 10 km/piksel veride
@@ -248,6 +249,21 @@ Renkler [@destanevreni'nin Çanakkale 1915 harita animasyonundan](.) ffmpeg kare
 Tipografi: başlıklarda Archivo 800, her yerde JetBrains Mono. Rölyef, kuzeybatı
 ışıklı tepe gölgelemesiyle çizilir — Conkbayırı ve Kocaçimen'in Arıburnu'na
 nasıl hâkim olduğu ancak böyle okunuyor.
+
+**Harita modu açıklaması.** Mod düğmeleri yalnız bir ad taşıyordu; MAYIN
+seçildiğinde ekranda beliren şekillerin anlamı hiçbir yerde yazmıyordu.
+Düğmelerin yanındaki kutu etkin modun ne gösterdiğini ve renk anahtarını
+yazar; renkler `style/tokens.ts` paletinden okunur, tema değişince kutu da
+değişir.
+
+MAYIN modu yeniden çizildi. Mayınlı deniz illeri boyanıyordu — Voronoi
+hücreleri yuvarlak olduğundan ekranda "mayınlı bölge" gibi okunan, anlamı
+belirsiz lekeler çıkıyordu. Oysa mayınlar boğazı enlemesine kapatan dar
+bariyerlerdi. Artık il boyaması yok; her hat bir **çizgi**, üstündeki
+noktalar **kalan** mayınlar, etiket de hattın adı ve kalan/başlangıç sayısı.
+Etiketler yalnız hatların birbirinden ayrıldığı yakınlıkta çıkar: Dar
+Boğaz'da 11 hat 1,4 km'ye sıkışıyor, kampanya kadrajında 11 etiket üst üste
+binip okunmaz bir yığın oluyordu.
 
 ## Mimari
 

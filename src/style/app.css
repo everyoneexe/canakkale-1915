@@ -1218,3 +1218,53 @@ body {
     transform: none;
   }
 }
+
+/* ── Harita modu açıklaması ─────────────────────────────────────────────
+   Mod düğmeleri yalnız bir ad gösteriyordu; "MAYIN" seçince ekranda beliren
+   şekillerin ne anlama geldiği hiçbir yerde yazmıyordu. Bu kutu etkin modun
+   ne gösterdiğini ve renk anahtarını yazar. */
+.mod-aciklama {
+  position: absolute;
+  top: 78px;
+  left: 156px;
+  width: 232px;
+  padding: 9px 11px 10px;
+  border: 1px solid var(--edge);
+  background: rgba(3, 4, 6, 0.9);
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 1.5;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  z-index: 15;
+  pointer-events: none;
+}
+.mod-aciklama b {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--accent);
+  font-weight: 500;
+  letter-spacing: 0.14em;
+}
+.mod-aciklama ul {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.mod-aciklama li {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 3px;
+}
+/* Renk anahtarı kareleri — satır içi `background` ile boyanır. */
+.mod-aciklama i {
+  flex: 0 0 auto;
+  width: 9px;
+  height: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+}
+.mod-aciklama i.cizgi {
+  height: 3px;
+  border: 0;
+}

@@ -21,15 +21,9 @@ import {
   reliefBox,
 } from '../core/geo.ts';
 import { C, LAYER } from '../style/tokens.ts';
-import { fortRange, liveShips, minefieldsIn } from '../engine/naval.ts';
+import { fortRange, liveShips } from '../engine/naval.ts';
 import { TERRAINS } from '../data/units.ts';
 import { TerrainTiles, zscale } from './tiles.ts';
-import lodMeta from '../data/lod.json';
-
-/** Bölgesel rölyef kademeleri — `tools/world/build_lod.py` üretir. */
-const LOD = lodMeta as {
-  levels: { image: string; west: number; south: number; east: number; north: number }[];
-};
 
 /**
  * Harita çizimi — @destanevreni'nin animasyonundaki görsel dil:
@@ -116,6 +110,8 @@ export class MapView {
   private gPaths = new Graphics();
   private gUnits = new Container();
   private gLabels = new Container();
+  /** MAYIN modundaki hat etiketleri; yeniden kullanılır. */
+  private mineText: Text[] = [];
 
   private nodes: ProvinceNode[] = [];
   private labelPool: Text[] = [];
@@ -216,6 +212,7 @@ export class MapView {
     this.gRelief.removeChildren();
     this.gFillLayer.removeChildren();
     this.gLabels.removeChildren();
+    this.mineText = [];
     this.gUnits.removeChildren();
     this.labelPool = [];
     this.counterPool = [];
@@ -266,7 +263,8 @@ export class MapView {
       // (yükseklik/500, ×0,78) kullanıyordu ve tiyatro, çevresindeki LOD
       // dokusunun ortasında koyu bir dikdörtgen olarak duruyordu.
       //
-      // Gölge sertliği `tiles.ts:zscale` ile aynı yasaya tabi.
+      // Gölge sertliği `tiles.ts:zscale` ile aynı yasaya tabi — akan karo
+      // katmanıyla parlaklık dikişi olmasın.
       const mppX = (box.maxX - box.minX) / w;
       const mppY = (box.maxY - box.minY) / h;
       // `zscale` derece ızgarası varsayar; tiyatro ızgarası metre cinsinden.
@@ -312,42 +310,21 @@ export class MapView {
       source = Texture.from(cv);
     }
 
-    // ── Dünya zemini: çözünürlük kademeleri ─────────────────────────
-    // Tek bir dünya dokusu 11 px/derece, yani ~10 km/piksel. Tiyatro
-    // kutusunun dışında yakınlaştırınca bulanık bir lekeye dönüşüyordu.
-    // Kaba → ince sırayla üst üste serilir, ince olan kabayı örter:
-    //
-    //   world-relief   11 px/°   (~10 km)   tüm dünya
-    //   lod-region     91 px/°   (~1,2 km)  Osmanlı coğrafyası
-    //   lod-near      364 px/°   (~305 m)   Ege + Marmara
-    //   tiyatro      2940 px/°   (~29 m)    Çanakkale
-    //
-    //   akan karo  ~5800 px/°  (~11 m)    görünen pencere, canlı indirilir
-    //
-    // Hepsi aynı gölgelendirme dilinde üretildiği için kademe sınırları
-    // görünmez; tek fark keskinlik.
+    // ── Dünya zemini ────────────────────────────────────────────────
+    // Tiyatro rölyefi yalnız indirilen kutuyu kaplıyor; arkasına dünya
+    // dokusu serilmezse kenarında haritanın bittiği keskin bir dikdörtgen
+    // kalıyor. Bu doku 11 px/derece (~10 km/piksel) — sadece zemin. Asıl
+    // çözünürlük `TerrainTiles` ile canlı gelir.
     if (mapKind() === 'canakkale') {
       const o = gameMap().origin;
       const kx = Math.cos((o.lat * Math.PI) / 180) * 111320;
       const ky = 110574;
-      const place = (t: Texture, w: number, s: number, e: number, n: number) => {
-        const sp = new Sprite(t);
-        sp.x = (w - o.lon) * kx;
-        sp.y = -(n - o.lat) * ky;
-        sp.width = (e - w) * kx;
-        sp.height = (n - s) * ky;
-        this.gWorld.addChild(sp);
-      };
-
-      const [worldTex, ...lodTex] = await Promise.all([
-        Assets.load('world-relief.webp') as Promise<Texture>,
-        ...LOD.levels.map((l) => Assets.load(l.image) as Promise<Texture>),
-      ]);
-      place(worldTex, -180, -82, 180, 82);
-      LOD.levels.forEach((l, i) =>
-        place(lodTex[i]!, l.west, l.south, l.east, l.north),
-      );
-
+      const back = new Sprite((await Assets.load('world-relief.webp')) as Texture);
+      back.x = (-180 - o.lon) * kx;
+      back.y = -(82 - o.lat) * ky;
+      back.width = 360 * kx;
+      back.height = 164 * ky;
+      this.gWorld.addChild(back);
       this.gRelief.addChild(this.gWorld);
     }
 
@@ -361,9 +338,8 @@ export class MapView {
     // Akan katman EN ÜSTTE — tiyatro rölyefinin de üstünde. Tiyatro dokusu
     // 29 m/piksel, akan terrarium karoları 11 m/piksel: azami yakınlıkta
     // oyun alanı, çevresindeki akan araziden daha bulanık kalıyordu. LOD
-    // sözleşmesi tek: en ince veri kazanır. Akış yalnız 728 px/derecenin
-    // ötesinde devreye girer, altında kendini temizler ve tiyatro dokusu
-    // yeniden görünür olur.
+    // sözleşmesi tek: en ince veri kazanır. Zemin dokusunun üstüne çıkar
+    // çıkmaz devreye girer, altında kendini temizler.
     if (mapKind() === 'canakkale') {
       this.tiles = new TerrainTiles(this.gRelief, gameMap().origin);
       this.streamTerrain();
@@ -907,12 +883,10 @@ export class MapView {
         return { colour: C.entente, alpha: 0.06 + (p.current ?? 0) * 0.06 };
       }
       case 'mayin': {
-        if (!p.isSea) return { colour: C.land, alpha: 0.12 };
-        const mines = minefieldsIn(s, p.id)
-          .filter((m) => (m.side !== s.playerSide ? m.spotted : true))
-          .reduce((n, m) => n + m.mines, 0);
-        if (mines === 0) return { colour: C.sea, alpha: 0 };
-        return { colour: C.mine, alpha: Math.min(0.42, 0.07 + mines / 420) };
+        // Deniz illeri BOYANMAZ. Voronoi hücreleri yuvarlak lekeler
+        // olduğundan "mayınlı bölge" gibi okunuyor, oysa mayınlar dar
+        // hatlar hâlinde. Hatların kendisi `drawMines` içinde çizilir.
+        return { colour: p.isSea ? C.sea : C.land, alpha: p.isSea ? 0 : 0.12 };
       }
     }
   }
@@ -974,22 +948,74 @@ export class MapView {
     if (this.selection?.kind === 'il') outline(this.selection.id, C.accentGlow, 2.6, 1);
   }
 
+  /**
+   * Mayın hatları.
+   *
+   * Önceden yalnızca nokta dizisi çiziliyor, üstüne de mayınlı deniz illeri
+   * boyanıyordu: ekranda ne olduğu belirsiz yuvarlak lekeler kalıyordu.
+   * Artık her hat gerçek bir ÇİZGİ olarak, MAYIN modunda adı + mayın
+   * sayısıyla etiketli çizilir. Mayınlar boğazı enlemesine kapatan dar
+   * bariyerlerdi; biçim bunu anlatmalı.
+   */
   private drawMines(s: GameState): void {
     this.gMines.clear();
+    for (const t of this.mineText) t.visible = false;
     if (mapKind() !== 'canakkale') return;
-    const r = Math.max(260, 3.1 / this.zoom);
+
+    // Dar Boğaz'da 11 hat 1,4 km'ye sıkışıyor. Noktalar büyük olunca hepsi
+    // tek bir kırmızı lekeye kaynıyordu; ince tut, hatlar ayrı okunsun.
+    const dot = Math.max(80, 1.3 / this.zoom);
+    const hair = Math.max(50, 0.9 / this.zoom);
+    let slot = 0;
+
     for (const m of Object.values(s.minefields)) {
       if (m.mines <= 0 || m.laidOn > s.day) continue;
-      const mine = m.side === s.playerSide;
-      if (!mine && !m.spotted) continue;
-      const n = Math.max(2, Math.min(32, Math.round(m.mines / 2)));
-      const colour = mine ? C.mine : C.hostile;
+      const own = m.side === s.playerSide;
+      if (!own && !m.spotted) continue;
+      const colour = own ? C.mine : C.hostile;
+      const alpha = own ? 0.95 : 0.78;
+
+      // Hat gövdesi: iki ucu birleştiren ince çizgi — bariyer okunsun.
+      this.gMines
+        .moveTo(m.from.x, m.from.y)
+        .lineTo(m.to.x, m.to.y)
+        .stroke({ width: hair * 1.8, color: colour, alpha: alpha * 0.55 });
+
+      // Üstünde kalan mayınlar kadar nokta — tükendikçe hat seyrelir.
+      const n = Math.max(2, Math.min(40, Math.round(m.mines / 2)));
       for (let i = 0; i < n; i++) {
         const t = n === 1 ? 0.5 : i / (n - 1);
         this.gMines
-          .circle(m.from.x + (m.to.x - m.from.x) * t, m.from.y + (m.to.y - m.from.y) * t, r)
-          .fill({ color: colour, alpha: mine ? 0.95 : 0.78 });
+          .circle(
+            m.from.x + (m.to.x - m.from.x) * t,
+            m.from.y + (m.to.y - m.from.y) * t,
+            dot,
+          )
+          .fill({ color: colour, alpha });
       }
+
+      // Etiket yalnız hatların birbirinden ayrıldığı yakınlıkta. Kampanya
+      // kadrajında 11 etiket üst üste binip okunmaz bir yığın oluyordu.
+      const len = Math.hypot(m.to.x - m.from.x, m.to.y - m.from.y);
+      if (this.mode !== 'mayin' || len * this.zoom < 70) continue;
+
+      // MAYIN modunda adı ve kalan/başlangıç sayısı.
+      let label = this.mineText[slot];
+      if (!label) {
+        label = new Text({ text: '', style: LABEL_MINOR.clone() });
+        label.anchor.set(0.5, 1);
+        this.gLabels.addChild(label);
+        this.mineText[slot] = label;
+      }
+      slot++;
+      label.visible = true;
+      label.text = `${m.name.toLocaleUpperCase('tr')} · ${m.mines}/${m.initialMines}`;
+      label.style.fill = colour;
+      label.x = (m.from.x + m.to.x) / 2;
+      // Komşu hatlar hâlâ yakınsa etiketler sırayla yukarı kaydırılır.
+      label.y =
+        (m.from.y + m.to.y) / 2 - (dot * 3 + (slot % 3) * (13 / this.zoom));
+      label.scale.set(1 / this.zoom);
     }
   }
 

@@ -10,6 +10,7 @@ import type {
 import { loadMap, prov, provinces } from './core/geo.ts';
 import type { MapKind } from './core/geo.ts';
 import { WEATHERS } from './data/units.ts';
+import { C } from './style/tokens.ts';
 import { formatDate, newGame, setActiveScenario } from './engine/scenario.ts';
 import { newWorldGame } from './engine/world-scenario.ts';
 import { SIDE_LABEL_WORLD } from './data/world1914.ts';
@@ -235,10 +236,63 @@ class Game {
         for (const other of nav.querySelectorAll('.mod')) {
           other.setAttribute('aria-pressed', String(other === b));
         }
+        this.describeMode();
         this.view.draw();
       });
       nav.appendChild(b);
     }
+    this.describeMode();
+  }
+
+  /**
+   * Etkin harita modunun ne gösterdiğini yazar.
+   *
+   * Düğmeler yalnız bir ad taşıyordu; "MAYIN" seçildiğinde ekranda beliren
+   * şekillerin anlamı hiçbir yerde yazmıyor, oyuncu yuvarlak lekelere bakıp
+   * ne olduğunu kestirmeye çalışıyordu.
+   */
+  private describeMode(): void {
+    const box = $('mod-aciklama');
+    const key = (c: string, text: string, line = false) =>
+      `<li><i class="${line ? 'cizgi' : ''}" style="background:${c}"></i>${text}</li>`;
+    // Taraf adları ve renkleri PALETTEN gelir; sabit yazılırsa tema
+    // değişince sessizce yalan söyler.
+    const hex = (n: number) => `#${n.toString(16).padStart(6, '0')}`;
+    const ott = this.state?.playerSide === 'ottoman';
+    const own = ott ? 'Osmanlı' : 'İtilaf';
+    const foe = ott ? 'İtilaf' : 'Osmanlı';
+    const ownC = hex(ott ? C.ottomanDim : C.ententeDim);
+    const foeC = hex(ott ? C.ententeDim : C.ottomanDim);
+
+    const text: Record<MapMode, string> = {
+      siyasi:
+        `<b>SİYASİ</b>İlleri denetleyen tarafa göre boyar.<ul>` +
+        key(ownC, `${own} denetiminde`) +
+        key(foeC, `${foe} denetiminde`) +
+        key(hex(C.land), 'Görülmemiş — keşif yok') +
+        `</ul>`,
+      arazi:
+        `<b>ARAZİ</b>Zemin tipi. Savunmaya kattığı değer yükseldikçe renk ` +
+        `koyulaşır: sırtlarda saldırmak pahalıdır.`,
+      tedarik:
+        `<b>İKMAL</b>İllere ulaşan ikmal oranı. Yeşil bol, kırmızı kesik; ` +
+        `ikmalsiz birlik organizasyon kaybeder ve cephane harcayamaz.<ul>` +
+        key('#7fc08a', 'Tam ikmal') +
+        key(hex(C.accent), 'Zorlanıyor') +
+        key(hex(C.mine), 'Kesik') +
+        `</ul>`,
+      deniz:
+        `<b>DENİZ</b>Yalnız deniz illeri. Renk koyuldukça akıntı güçlüdür — ` +
+        `Boğaz akıntısı mayın tarama ve gemi hızını düşürür.`,
+      mayin:
+        `<b>MAYIN</b>Her hat boğazı enlemesine kapatan bir bariyerdir; ` +
+        `çizgi hattın kendisi, noktalar üstünde KALAN mayınlardır. Etiket ` +
+        `hattın adını ve kalan/başlangıç sayısını verir.<ul>` +
+        key(hex(C.mine), `${own} hattı`, true) +
+        key(hex(C.hostile), `${foe} hattı — yalnız tespit edilmişse`, true) +
+        `</ul>`,
+    };
+    box.innerHTML = text[this.view.mode];
   }
 
   private bindChrome(): void {
@@ -257,6 +311,7 @@ class Game {
         for (const [i, b] of [...$('modlar').querySelectorAll('.mod')].entries()) {
           b.setAttribute('aria-pressed', String(i === idx - 1));
         }
+        this.describeMode();
         this.view.draw();
       }
     });
@@ -452,6 +507,9 @@ class Game {
 
   private refresh(): void {
     const s = this.state;
+    // Taraf burada kesinleşir; düğmeler kurulurken `state` henüz yoktu ve
+    // açıklama kutusu oyuncuyu yanlış tarafta gösteriyordu.
+    this.describeMode();
     $('tarih').textContent = formatDate(s.date).toLocaleUpperCase('tr-TR');
     const w = WEATHERS[s.weather];
     $('hava').textContent = `${w.name} · gün ${s.day}`;
