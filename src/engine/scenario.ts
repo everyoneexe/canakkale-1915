@@ -379,7 +379,7 @@ export function newGame(playerSide: Side = 'ottoman', seed = 19150318): GameStat
     }
   }
 
-  return {
+  const state: GameState = {
     day: 0,
     date: START_DATE,
     phase: 'emir',
@@ -400,4 +400,5 @@ export function newGame(playerSide: Side = 'ottoman', seed = 19150318): GameStat
     rngState: seed,
     outcome: null,
   };
+  return state;
 }

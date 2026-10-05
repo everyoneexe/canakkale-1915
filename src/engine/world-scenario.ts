@@ -314,39 +314,6 @@ function buildWorldSetup(th: Theatre): WorldSetup {
       };
     });
 
-    // ── Pakette yazılı tarihsel birlikler ──
-    // Prosedürel tümen "Rusya 7. Tümen" diye adlandırılıyordu; burada
-    // gerçek teşkilât gerçek yerine konur.
-    for (const f of (pack?.formations ?? []).filter((x) => x.nation === spec.id)) {
-      const ftpl = TEMPLATE_BY_ID[f.templateId];
-      if (!ftpl) continue;
-      const home = nearestProvince(f.at[0], f.at[1], landPool);
-      if (!home) continue;
-      const fagg = aggregate(ftpl);
-      const fid = `${spec.id.slice(0, 10).replace(/\W/g, '')}_${slug(f.name)}`;
-      const fArrives = f.arrivesOn ? Math.max(0, dayOf(f.arrivesOn, th.start)) : arrives;
-      landUnits[fid] = {
-        id: fid,
-        name: f.name,
-        nation: ftpl.nation,
-        side,
-        templateId: f.templateId,
-        location: home.id,
-        strength: fagg.men,
-        maxStrength: fagg.men,
-        organisation: fagg.organisation,
-        maxOrganisation: fagg.organisation,
-        entrenchment: 1,
-        experience: 10,
-        supplied: 1,
-        commanderId: null,
-        order: null,
-        moveProgress: 0,
-        inCombat: false,
-        embarkedIn: fArrives > 0 ? 'bekleme' : null,
-      };
-    }
-
     // ── Donanma ──
     if (spec.capitalShips + spec.cruisers > 0) {
       const capProv = capitals[spec.id];
@@ -396,6 +363,42 @@ function buildWorldSetup(th: Theatre): WorldSetup {
         transited: [],
       };
     }
+  }
+
+  // ── Pakette yazılı tarihsel birlikler ────────────────────────────
+  // Ulus döngüsünün DIŞINDA: sefer kuvvetlerinin cephede toprağı yoktur.
+  // Mezopotamya'da Britanya ve Hindistan'ın bbox içinde tek ili yok, bu
+  // yüzden döngü onları atlıyor ve 6. Puna Tümeni hiç sahneye çıkmıyordu.
+  for (const f of pack?.formations ?? []) {
+    const fspec = byId[f.nation] ?? specById[f.nation];
+    const fside = fspec ? SIDE_OF[fspec.side] : null;
+    const ftpl = TEMPLATE_BY_ID[f.templateId];
+    if (!fside || !ftpl) continue;
+    const home = nearestProvince(f.at[0], f.at[1], landPool);
+    if (!home) continue;
+    const fagg = aggregate(ftpl);
+    const fid = `pk_${slug(f.nation).slice(0, 8)}_${slug(f.name)}`;
+    const fArrives = f.arrivesOn ? Math.max(0, dayOf(f.arrivesOn, th.start)) : 0;
+    landUnits[fid] = {
+      id: fid,
+      name: f.name,
+      nation: ftpl.nation,
+      side: fside,
+      templateId: f.templateId,
+      location: home.id,
+      strength: fagg.men,
+      maxStrength: fagg.men,
+      organisation: fagg.organisation,
+      maxOrganisation: fagg.organisation,
+      entrenchment: 1,
+      experience: 10,
+      supplied: 1,
+      commanderId: null,
+      order: null,
+      moveProgress: 0,
+      inCombat: false,
+      embarkedIn: fArrives > 0 ? 'bekleme' : null,
+    };
   }
 
   return { owners, capitals, victoryPoints, supplyHubs, landUnits, fleets };
@@ -543,7 +546,7 @@ export function newWorldGame(
     };
   }
 
-  return {
+  const state: GameState = {
     day: 0,
     date: th.start,
     phase: 'emir',
@@ -567,6 +570,7 @@ export function newWorldGame(
     rngState: seed,
     outcome: null,
   };
+  return state;
 }
 
 let setupCache: { id: string; setup: WorldSetup } | null = null;
