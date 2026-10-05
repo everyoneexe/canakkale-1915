@@ -337,6 +337,86 @@ Etiketler yalnız hatların birbirinden ayrıldığı yakınlıkta çıkar: Dar
 Boğaz'da 11 hat 1,4 km'ye sıkışıyor, kampanya kadrajında 11 etiket üst üste
 binip okunmaz bir yığın oluyordu.
 
+## Cepheler ve içerik paketleri
+
+Oyun **iki savaş, 16 cephe** taşır. Çanakkale'nin kendi yüksek çözünürlüklü
+haritası var; diğer 15 cephe ortak dünya il haritasını farklı kutu ve
+tarihle açar.
+
+Önceden Çanakkale dışındaki her cephe bütün içeriğini **prosedürel**
+üretiyordu: tümenler ulusun nüfusundan hesaplanıp `"Rusya 7. Tümen"` diye
+adlandırılıyor, komutan listesi boş geliyor, 2. Dünya Savaşı'nda hiç olay
+çıkmıyordu. `data/fronts/pack.ts` bir cepheye elle yazılmış teşkilât,
+komutan ve olay bağlamayı sağlar; prosedürel üretim **ulus bazında** devre
+dışı kalır, kapsanmayan uluslar eskisi gibi üretilir.
+
+| cephe | birlik | komutan | olay |
+| --- | --- | --- | --- |
+| Çanakkale 1915 | 28 | 29 | 30 |
+| Batı Cephesi | 19 | 10 | 10 |
+| Doğu Cephesi | 18 | 7 | 8 |
+| İtalyan Cephesi | 15 | 5 | 8 |
+| Balkan Cephesi | 17 | 6 | 9 |
+| Kafkas Cephesi | 21 | 7 | 9 |
+| Mezopotamya | 16 | 8 | 10 |
+| Sina ve Filistin | 26 | 8 | 11 |
+| Doğu Afrika Seferi | 16 | 5 | 9 |
+| Polonya Seferi | 17 | 5 | 5 |
+| Batı Avrupa 1940 | 17 | 6 | 6 |
+| Kuzey Afrika | 16 | 5 | 8 |
+| Doğu Cephesi 1941 | 20 | 6 | 8 |
+| Pasifik Savaşı | 16 | 5 | 8 |
+| İtalya Seferi | 13 | 5 | 8 |
+| Normandiya | 17 | 6 | 8 |
+
+Teşkilâtlar cephenin **açılış günündeki** tertibi yansıtır ve koordinatlar
+gerçek konuş bölgelerinden gelir. Birimin tarafı ulus künyesinden, çizim
+ulusu şablondan okunur; paket ikisini de tekrar etmez.
+
+### Tartışmalı sayılar yazılmaz
+
+Kaynakların ayrıldığı yerde tek rakam gerçekmiş gibi sunulmaz; olay metni
+aralığı ve çelişkiyi söyler.
+
+* **Sarıkamış kaybı** — kaynaklar 23.000 ile 90.000 arasında değişiyor ve
+  donarak ölenlerle muharebede ölenleri ayırmak çoğu kayıtta mümkün değil.
+* **Kut'ta teslim olan general sayısı** — aynı kaynakta hem "4 general" hem
+  "5 general" geçiyor, Halil Paşa'nın ordu mesajı "13 general" diyor.
+  Subay (481) ve er (~13.000) sayıları tutarlı olduğu için onlar yazıldı.
+* **Doğu Afrika hamal kayıpları** — Alman tarafı hiç kayıt tutmadı; İngiliz
+  tarafı için 90-95 bin aralığı veriliyor.
+* **Hat başına mayın sayısı** — kaynaklarda hat hat verilmiyor; `≈` işareti
+  ve panel uyarısı bunu söyler. Kesin olan 11. Hat'tır (Nusret, 26 mayın).
+
+### Paketler yazılırken ortaya çıkan motor hataları
+
+Her cephe yeni bir kod yolunu ilk kez çalıştırdı ve beşi ancak böyle
+görünür oldu.
+
+1. **Sefer kuvvetleri hiç kurulmuyordu.** Paket birlikleri ulus döngüsünün
+   içindeydi; o döngü cephede toprağı olmayan ulusu atlıyor. Mezopotamya'da
+   Britanya ve Hindistan'ın kutu içinde tek ili yok — 6. Puna Tümeni hiç
+   sahneye çıkmıyordu.
+2. **Takviyeler kalıcı donmuştu.** `arriveReinforcements` yalnız
+   `scenario().landUnits` listesini tarıyordu; dünya senaryosunda o liste
+   boş. `bekleme` yazılan her birlik sonsuza kadar bekledi.
+3. **Kampanyanın ilk gününe yazılı olaylar hiç çıkmıyordu.** Gün sayacı tur
+   sonunda arttığı için 0. gün hiç kontrol edilmiyordu — Çanakkale'nin
+   19 Şubat 1915 açılış kartı da bu yüzden hiç görünmemişti.
+4. **Bbox'lı cephelerde oyun üçüncü günde bitiyordu.** Başkent seçiminde
+   mesafe sınırı yoktu; Kafkas Cephesi'nin 76 ilinde "Berlin'e en yakın il"
+   bir Rus ili seçiliyor, zafer koşulu onu Alman başkenti sayıyordu.
+5. **`ai.ts` modül başında `dayOf` çağırıyordu** ve `scenario.ts` ile döngü
+   kurup `START_DATE` henüz TDZ'deyken patlıyordu.
+
+### Doğrulanmış tarih düzeltmeleri
+
+* **Doğu Afrika Seferi** 3 Ağustos 1914'te başlıyordu. O gün cephede hiçbir
+  şey olmamıştı; ilk kara harekâtı **5 Ağustos**'ta Uganda birliklerinin
+  Viktorya Gölü yakınındaki Alman karakollarına saldırmasıdır.
+* Eski genel **Orta Doğu Cephesi** kaldırıldı: "Mezopotamya, Sina, Filistin"
+  diyordu ve tamamen prosedüreldi. Kapsamı üç ayrıntılı cepheye bölündü.
+
 ## Oyun ne öğretiyor
 
 Üç kanal var ve üçü de aynı tarihsel kısıtı anlatıyor.
