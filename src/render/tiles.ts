@@ -21,15 +21,15 @@ import { Container, Sprite, Texture } from 'pixi.js';
  *   Özel Pixi gölgelendiricisine kıyasla çok daha az kırılgan.
  * * **Mercator → eşdikdörtgen.** Karolar Web Mercator, oyun haritası enlemde
  *   doğrusal. Yeniden örnekleme satır bazında yapılır.
- * * **Aynı gölgelendirme dili.** `tools/world/build_lod.py` ile birebir aynı
- *   K sabiti, yükseklik rampası ve deniz rengi — akan katman statik kademenin
- *   üstüne bindiğinde parlaklık atlaması olmaz.
+ * * **Aynı gölgelendirme dili.** Paketteki `world-relief` ve tiyatro rölyefiyle
+ *   birebir aynı ışık yönü, yükseklik rampası ve deniz rengi — akan katman
+ *   altındakinin üstüne bindiğinde parlaklık atlaması olmaz.
  */
 
 const BASE = 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium';
 
 /**
- * Gölge sertliği — `tools/world/build_lod.py:zscale` ile birebir aynı.
+ * Gölge sertliği. Tüm rölyef katmanları bu yasaya uyar.
  * Tam telafi (zs ∝ px/derece) ince kademede gölgeyi doyurup araziyi kumlu
  * bir kabartmaya çeviriyordu; 0,18 üssü iki ucun arasını tutuyor.
  */
@@ -37,12 +37,22 @@ export function zscale(pxPerDeg: number): number {
   return 0.04 * (pxPerDeg / (4096 / 360)) ** 0.18;
 }
 
-/** `lod-near` 364 px/° veriyor; altında akışa gerek yok. */
-const MIN_Z = 10;
+/**
+ * Paketteki `world-relief` 4096 px / 360° = 11,4 px/derece. z4 tam olarak
+ * aynı; ilk kazanç z5'te. Akış buradan başlar ve TÜM dünyayı kapsar —
+ * önceden Ege ve Osmanlı coğrafyası için iki statik kutu paketleniyordu,
+ * dışarıda kalan her yer 10 km/piksel bulanıklıkta kalıyordu.
+ */
+const MIN_Z = 5;
 /** z13 ≈ 11 m/piksel. Daha ötesi hem ağır hem veride karşılığı yok. */
 const MAX_Z = 13;
 /** Mozaik kenarı en çok bu kadar karo — doku 4096 px sınırında kalsın. */
 const MAX_TILES_PER_AXIS = 16;
+/**
+ * Mozaik toplam piksel tavanı. Gölgelendirme CPU'da; 16 milyon piksel
+ * saniyeler sürer ve geniş görünümlerde zaten `world-relief` yeterli.
+ */
+const MAX_MOSAIC_PX = 6e6;
 
 function tileY2lat(y: number, n: number): number {
   return (Math.atan(Math.sinh(Math.PI * (1 - (2 * y) / n))) * 180) / Math.PI;
@@ -95,8 +105,8 @@ export class TerrainTiles {
     // Ekranın istediği çözünürlüğü karşılayan en küçük z.
     let z = MIN_Z;
     while (z < MAX_Z && (256 * (1 << z)) / 360 < pxPerDeg) z++;
-    if ((256 * (1 << MIN_Z)) / 360 >= pxPerDeg * 2) {
-      // Statik `lod-near` zaten yetiyor: akan katmanı kaldır.
+    if (pxPerDeg <= (4096 / 360) * 1.3) {
+      // Paketteki dünya dokusu zaten yetiyor: akan katmanı kaldır.
       this.clear();
       return;
     }
@@ -108,10 +118,13 @@ export class TerrainTiles {
     let y0 = Math.floor(lat2tileY(view.north, n));
     let y1 = Math.floor(lat2tileY(view.south, n));
 
-    // Pencere çok genişse kademe düşür; mozaik 4096 px'i aşmasın.
+    // Pencere çok genişse kademe düşür: ne 4096 px kenarı, ne piksel tavanı
+    // aşılsın. Aşağı inildikçe her adım piksel sayısını dörtte bire düşürür.
     while (
       z > MIN_Z &&
-      (x1 - x0 + 1 > MAX_TILES_PER_AXIS || y1 - y0 + 1 > MAX_TILES_PER_AXIS)
+      (x1 - x0 + 1 > MAX_TILES_PER_AXIS ||
+        y1 - y0 + 1 > MAX_TILES_PER_AXIS ||
+        (x1 - x0 + 1) * (y1 - y0 + 1) * 65536 > MAX_MOSAIC_PX)
     ) {
       z--;
       n = 1 << z;
@@ -181,9 +194,10 @@ export class TerrainTiles {
         this.cache.set(k, out);
       }),
     );
-    // Önbellek sınırsız büyümesin.
-    if (this.cache.size > 1400) {
-      let drop = this.cache.size - 1000;
+    // Önbellek sınırsız büyümesin: karo başına 128 KB, 1400 karo 180 MB
+    // demekti ve sekme çöküyordu. 400 karo ≈ 52 MB.
+    if (this.cache.size > 400) {
+      let drop = this.cache.size - 280;
       for (const k of this.cache.keys()) {
         if (drop-- <= 0) break;
         this.cache.delete(k);
