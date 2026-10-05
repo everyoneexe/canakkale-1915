@@ -211,6 +211,13 @@ export interface LandUnit {
   /** Organizasyon 0..maxOrganisation. 0 = muharebe edemez, geri çekilir. */
   organisation: number;
   maxOrganisation: number;
+  /**
+   * Sahneye çıkacağı gün. `embarkedIn === 'bekleme'` olan birlik bu güne
+   * kadar haritada yoktur. Çanakkale'de senaryo listesinden okunuyordu;
+   * dünya senaryosunda o liste boş olduğu için takviyeler KALICI olarak
+   * donup kalıyordu.
+   */
+  arrivesOn?: DayIndex;
   /** 0..maxEntrenchment — siperlenme seviyesi. */
   entrenchment: number;
   /** Tecrübe 0..100. */

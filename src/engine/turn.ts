@@ -535,6 +535,14 @@ function updateVisibility(state: GameState): void {
 // ─────────────────────────────────────── takviye, olay, zafer ──────────
 
 function arriveReinforcements(state: GameState): void {
+  // Dünya senaryosunda `scenario().landUnits` boştur; takviye bilgisi
+  // birimin KENDİSİNDE durur. `<=` kullanılır: bir gün atlansa bile
+  // birlik sahneye çıkar, sonsuza kadar beklemede kalmaz.
+  for (const unit of Object.values(state.landUnits)) {
+    if (unit.embarkedIn !== 'bekleme') continue;
+    if (unit.arrivesOn === undefined || unit.arrivesOn > state.day) continue;
+    unit.embarkedIn = null;
+  }
   for (const u of scenario().landUnits) {
     if (u.arrivesOn === undefined || u.arrivesOn !== state.day) continue;
     const unit = state.landUnits[u.id];
