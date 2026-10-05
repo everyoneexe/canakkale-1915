@@ -10,6 +10,7 @@ import type {
   SideState,
   UnitId,
 } from '../core/types.ts';
+import { freshAiMemory } from '../core/types.ts';
 import { metaOf, provinces, setProvinceValues } from '../core/geo.ts';
 import { TEMPLATE_BY_ID, aggregate } from '../data/units.ts';
 import { NATIONS, WORLD_EVENTS } from '../data/world1914.ts';
@@ -329,6 +330,7 @@ function buildWorldSetup(th: Theatre): WorldSetup {
         moveProgress: 0,
         embarked: [],
         inCombat: false,
+        transited: [],
       };
     }
   }
@@ -475,6 +477,7 @@ export function newWorldGame(
     reports: [],
     firedEvents: [],
     pendingEvents: [],
+    ai: freshAiMemory(),
     rngState: seed,
     outcome: null,
   };

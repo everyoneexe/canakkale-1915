@@ -16,19 +16,20 @@ import type { Rng } from './rng.ts';
  */
 
 const LANDING_DAY = dayOf('1915-04-25');
-
 /**
- * Üsse çekilip onarılan filolar. Histerezis için gerekli: %55'in altında
- * çekilir, %92'ye kadar geri dönmez — aksi halde filo eşikte gidip gelir.
+ * Büyük zorlama denemesi. Tarihte donanma bir ay tarama yapıp ilerleyemedi
+ * ve 18 Mart'ta zırhlıları doğrudan tabyaların üstüne sürdü.
+ *
+ * Bu emir (`zorla_gec`) motorda eksiksiz işleniyordu — ateş gücü ×1,45,
+ * mühimmat ×2, alınan hasar ×2,5 — ama YZ onu HİÇ vermiyordu. Sonuç:
+ * kampanyanın en ünlü günü oyunda hiç yaşanmıyor, donanma aylarca aynı
+ * iki emri tekrarlıyordu.
  */
-const REPAIRING = new Set<string>();
-
-/**
- * Seçilmiş çıkarma sahili. Her filo için yeniden kura çekilirse nakliye
- * filosu bir sahile, destek filosu başkasına gider ve çıkarma hiç olmaz;
- * harekât hedefi bir kez seçilip sahil alınana kadar korunur.
- */
-let committedBeach: ProvinceId | null = null;
+const GRAND_ATTEMPT_DAY = dayOf('1915-03-18');
+/** Deneme başarısızsa kaç gün sonra tekrarlanır. */
+const RETRY_DAYS = 12;
+/** Zorlamaya girmek için gereken asgari filo sağlığı. */
+const PRESS_MIN_HEALTH = 0.7;
 
 /** Filonun muharebe gemilerinin ortalama gövde sağlığı. */
 function fleetHealth(f: Fleet): number {
@@ -74,6 +75,7 @@ export function planAi(state: GameState, rng: Rng): void {
 // ─────────────────────────────────────────────────────── İTİLAF ────────
 
 function planEntente(state: GameState, rng: Rng): void {
+  const mem = state.ai;
   const fleets = Object.values(state.fleets).filter(
     (f) => f.side === 'entente' && liveShips(f).length > 0,
   );
@@ -83,13 +85,17 @@ function planEntente(state: GameState, rng: Rng): void {
 
   // Harekât hedefi tur başında BİR KEZ seçilir ve alınana kadar korunur.
   if (
-    committedBeach === null ||
-    state.provinces[committedBeach]?.controller === 'entente'
+    mem.committedBeach === null ||
+    state.provinces[mem.committedBeach]?.controller === 'entente'
   ) {
-    committedBeach = pickBeach(state, rng);
+    mem.committedBeach = pickBeach(state, rng);
   }
-  const beach = committedBeach;
+  const beach = mem.committedBeach;
   const landingSea = beach ? landingWaterFor(beach) : undefined;
+
+  // Aynı gün bütün ağır filolar TEK denemeye katılır; her filo ayrı gün
+  // denerse zorlama damla damla olur ve tarihsel yoğunluk kaybolur.
+  let pressedToday = false;
 
   for (const f of fleets) {
     if (f.order && f.order.path.length > 0) continue;
@@ -98,9 +104,9 @@ function planEntente(state: GameState, rng: Rng): void {
     // İlk sürümde filo ateş altında demirli kalıp haftalar içinde eriyordu.
     // Tarihsel davranış: hasarlı gemi Mudros'a döner, onarılır, geri gelir.
     const health = fleetHealth(f);
-    const repairing = REPAIRING.has(f.id);
+    const repairing = mem.repairing.includes(f.id);
     if (health < 0.55 || (repairing && health < 0.92)) {
-      REPAIRING.add(f.id);
+      if (!mem.repairing.includes(f.id)) mem.repairing.push(f.id);
       const base = 'd_ege_acik';
       if (f.location === base) {
         f.order = { kind: 'demirle', target: null, path: [] };
@@ -112,7 +118,7 @@ function planEntente(state: GameState, rng: Rng): void {
       }
       continue;
     }
-    REPAIRING.delete(f.id);
+    mem.repairing = mem.repairing.filter((id) => id !== f.id);
 
     const sweepers = fleetSweepRate(f) > 4;
     if (sweepers) {
@@ -127,6 +133,31 @@ function planEntente(state: GameState, rng: Rng): void {
             ? { kind: 'seyret', target, path }
             : { kind: 'demirle', target: null, path: [] };
         }
+        continue;
+      }
+    }
+
+    // ── 18 Mart manevrası: büyük zorlama denemesi ──
+    // Tarama tek başına boğazı açamıyor; tarihte donanma bir ay sonra
+    // zırhlıları doğrudan tabyaların üstüne sürdü. Bu dal olmadığı için
+    // ağır filolar aylarca menzil dışından düello edip duruyordu.
+    if (
+      navalPhase &&
+      !sweepers &&
+      f.embarked.length === 0 &&
+      health >= PRESS_MIN_HEALTH &&
+      state.day >= GRAND_ATTEMPT_DAY &&
+      state.day - mem.lastGrandAttempt >= RETRY_DAYS &&
+      STRAIT_AXIS.some((id) => minefieldsIn(state, id).some((m) => m.mines > 0))
+    ) {
+      // Hedef: hâlâ Osmanlı elindeki EN KUZEY boğaz ili — Marmara'ya çıkış.
+      const goal = [...STRAIT_AXIS]
+        .reverse()
+        .find((id) => state.provinces[id]?.controller !== 'entente');
+      const path = goal ? seaPath(state, f.location, goal) : null;
+      if (goal && path) {
+        f.order = { kind: 'zorla_gec', target: goal, path };
+        pressedToday = true;
         continue;
       }
     }
@@ -202,6 +233,8 @@ function planEntente(state: GameState, rng: Rng): void {
     }
     f.order = { kind: 'cikarma_destek', target: beach ?? null, path: [] };
   }
+
+  if (pressedToday) mem.lastGrandAttempt = state.day;
 
   // ── Kara birlikleri ──
   const land = Object.values(state.landUnits).filter(
