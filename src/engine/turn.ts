@@ -7,6 +7,7 @@ import type {
   ProvinceId,
   Side,
   Weather,
+  HistoricalEvent,
 } from '../core/types.ts';
 import { prov, provinceDist, provinces } from '../core/geo.ts';
 import { TERRAINS, WEATHERS } from '../data/units.ts';
@@ -551,6 +552,23 @@ function arriveReinforcements(state: GameState): void {
 function fireEvents(state: GameState): void {
   for (const e of scenario().events) {
     if (e.day !== state.day || state.firedEvents.includes(e.id)) continue;
+    state.firedEvents.push(e.id);
+    state.pendingEvents.push(e);
+    if (e.effect && !e.choices) applyEffect(state, e.effect);
+  }
+}
+
+/**
+ * Kampanyanın İLK GÜNÜNE yazılı olayları kuyruğa alır.
+ *
+ * Olaylar `endTurn` içinde `e.day === state.day` ile ateşleniyor ama gün
+ * sayacı tur sonunda artıyor: 0. gün hiç kontrol edilmiyordu. Çanakkale'nin
+ * 19 Şubat 1915 açılış kartı ve Mezopotamya'nın Fao çıkarması bu yüzden hiç
+ * görünmüyordu. Oyun kurulurken bir kez çağrılır.
+ */
+export function queueOpeningEvents(state: GameState, events: readonly HistoricalEvent[]): void {
+  for (const e of events) {
+    if (e.day !== 0 || state.firedEvents.includes(e.id)) continue;
     state.firedEvents.push(e.id);
     state.pendingEvents.push(e);
     if (e.effect && !e.choices) applyEffect(state, e.effect);

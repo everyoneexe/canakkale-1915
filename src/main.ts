@@ -13,13 +13,13 @@ import type { MapKind } from './core/geo.ts';
 import { WEATHERS } from './data/units.ts';
 import { C } from './style/tokens.ts';
 import { briefingFor } from './data/briefing.ts';
-import { formatDate, newGame, setActiveScenario } from './engine/scenario.ts';
+import { formatDate, newGame, scenario, setActiveScenario } from './engine/scenario.ts';
 import { newWorldGame } from './engine/world-scenario.ts';
 import { SIDE_LABEL_WORLD } from './data/world1914.ts';
 import { THEATRES, THEATRE_BY_ID } from './data/theatres.ts';
 import type { Theatre, WarId } from './data/theatres.ts';
 import { Globe } from './ui/globe.ts';
-import { endTurn, applyEffect } from './engine/turn.ts';
+import { queueOpeningEvents, endTurn, applyEffect } from './engine/turn.ts';
 import { issueLandOrder, issueNavalOrder } from './engine/orders.ts';
 import { liveShips, minefieldsIn } from './engine/naval.ts';
 import { MAP_MODES, MapView } from './render/map.ts';
@@ -202,6 +202,10 @@ class Game {
     await this.view.buildMap();
     setActiveScenario(null);
     this.state = useOwnMap ? newGame(side) : newWorldGame(side, 19140728, th);
+    // 0. güne yazılı olaylar: `endTurn` gün sayacını tur sonunda artırdığı
+    // için hiç kontrol edilmiyordu. Çanakkale'nin 19 Şubat açılış kartı ve
+    // Mezopotamya'nın Fao çıkarması bu yüzden görünmüyordu.
+    queueOpeningEvents(this.state, scenario().events);
 
     await dive;
     this.globe?.stop();
@@ -224,13 +228,17 @@ class Game {
     // Açılış brifingi. Oyuncu haritaya bırakılıp "TURU BİTİR" deniyordu;
     // ne durumda olduğu ve mekaniğin hangi kısıta dayandığı hiçbir yerde
     // yazmıyordu. Doğru modellenmiş ama anlatılmamış kısıt öğretmez.
-    if (useOwnMap) {
-      this.eventQueue = [
-        briefingFor(side, this.state.day, this.state.date),
-        ...this.eventQueue,
-      ];
-      this.showNextEvent();
-    }
+    // Çanakkale'de brifing kartı en öne konur; dünya cephelerinde cephe
+    // açıklaması bu işi görüyor. Her iki durumda da 0. güne yazılı olaylar
+    // gösterilmeli — yoksa Fao çıkarması kuyrukta bekleyip ilk tur sonunda
+    // alakasız bir anda çıkıyordu.
+    this.eventQueue = [
+      ...(useOwnMap ? [briefingFor(side, this.state.day, this.state.date)] : []),
+      ...this.state.pendingEvents,
+      ...this.eventQueue,
+    ];
+    this.state.pendingEvents = [];
+    this.showNextEvent();
   }
 
 

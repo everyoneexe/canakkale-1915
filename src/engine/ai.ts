@@ -15,7 +15,15 @@ import type { Rng } from './rng.ts';
  * tehdit altındaki kıyıya ihtiyat kaydırır ve mayın döker.
  */
 
-const LANDING_DAY = dayOf('1915-04-25');
+/**
+ * TEMBEL: modül başında `dayOf` çağırmak `scenario.ts` ile döngü kurup
+ * `START_DATE` henüz TDZ'deyken patlıyordu. İlk kullanımda hesaplanır.
+ */
+let landingDayCache: number | null = null;
+function landingDay(): number {
+  landingDayCache ??= dayOf('1915-04-25');
+  return landingDayCache;
+}
 /**
  * Büyük zorlama denemesi. Tarihte donanma bir ay tarama yapıp ilerleyemedi
  * ve 18 Mart'ta zırhlıları doğrudan tabyaların üstüne sürdü.
@@ -25,7 +33,11 @@ const LANDING_DAY = dayOf('1915-04-25');
  * kampanyanın en ünlü günü oyunda hiç yaşanmıyor, donanma aylarca aynı
  * iki emri tekrarlıyordu.
  */
-const GRAND_ATTEMPT_DAY = dayOf('1915-03-18');
+let grandAttemptCache: number | null = null;
+function grandAttemptDay(): number {
+  grandAttemptCache ??= dayOf('1915-03-18');
+  return grandAttemptCache;
+}
 /** Deneme başarısızsa kaç gün sonra tekrarlanır. */
 const RETRY_DAYS = 12;
 /** Zorlamaya girmek için gereken asgari filo sağlığı. */
@@ -81,7 +93,7 @@ function planEntente(state: GameState, rng: Rng): void {
   );
   const lostCapitals = countLostCapitals(state);
   // Üç büyük gemi kaybından sonra donanma ihtiyatlı davranır (18 Mart dersi).
-  const navalPhase = lostCapitals < 3 && state.day < LANDING_DAY;
+  const navalPhase = lostCapitals < 3 && state.day < landingDay();
 
   // Harekât hedefi tur başında BİR KEZ seçilir ve alınana kadar korunur.
   if (
@@ -146,7 +158,7 @@ function planEntente(state: GameState, rng: Rng): void {
       !sweepers &&
       f.embarked.length === 0 &&
       health >= PRESS_MIN_HEALTH &&
-      state.day >= GRAND_ATTEMPT_DAY &&
+      state.day >= grandAttemptDay() &&
       state.day - mem.lastGrandAttempt >= RETRY_DAYS &&
       STRAIT_AXIS.some((id) => minefieldsIn(state, id).some((m) => m.mines > 0))
     ) {
@@ -179,7 +191,7 @@ function planEntente(state: GameState, rng: Rng): void {
 
     // Çıkarma günü geldiyse ve üste bekleyen asker varsa, boş bir filo
     // nakliye görevine ayrılır.
-    if (state.day >= LANDING_DAY) {
+    if (state.day >= landingDay()) {
       const waiting = Object.values(state.landUnits).find(
         (u) =>
           u.side === 'entente' &&
@@ -240,7 +252,7 @@ function planEntente(state: GameState, rng: Rng): void {
   const land = Object.values(state.landUnits).filter(
     (u) => u.side === 'entente' && u.strength > 0 && u.embarkedIn !== 'bekleme',
   );
-  if (state.day >= LANDING_DAY) {
+  if (state.day >= landingDay()) {
     for (const u of land) {
       if (u.embarkedIn) {
         // Gemide: filo sahile bitişikse karaya çık.

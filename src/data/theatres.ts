@@ -166,6 +166,23 @@ export const THEATRES: readonly Theatre[] = [
     src: 'https://tr.wikipedia.org/wiki/Sarıkamış_Harekâtı',
   },
   {
+    id: 'ww1_mezopotamya',
+    war: 'ww1',
+    name: 'Mezopotamya Cephesi',
+    tagline: 'Kûtü\'l-Amâre · nehir, ikmal, kuşatma',
+    desc:
+      'İngiliz-Hint kuvvetleri 6 Kasım 1914\'te Fao\'ya çıkıp Basra\'yı aldı. '
+      + 'Bağdat\'a yürüyen 6. Puna Tümeni Selman-ı Pak\'ta durduruldu ve '
+      + 'Kut\'ta 147 gün kuşatıldı; dört kurtarma harekâtı da kırıldı. '
+      + '29 Nisan 1916\'da garnizon teslim oldu.',
+    start: '1914-11-06',
+    end: '1918-10-30',
+    bbox: [41.0, 28.5, 50.0, 37.5],
+    pin: [45.8, 32.5],
+    sides: { a: 'Osmanlı İmparatorluğu', b: 'Britanya · Hindistan' },
+    src: 'https://tr.wikipedia.org/wiki/Kûtü%27l-Amâre_Kuşatması',
+  },
+  {
     id: 'ww1_ortadogu',
     war: 'ww1',
     name: 'Orta Doğu Cephesi',
