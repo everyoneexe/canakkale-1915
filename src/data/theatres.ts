@@ -149,6 +149,23 @@ export const THEATRES: readonly Theatre[] = [
     src: WWI_KEY,
   },
   {
+    id: 'ww1_kafkas',
+    war: 'ww1',
+    name: 'Kafkas Cephesi',
+    tagline: 'Sarıkamış · dağ, kar, ikmal',
+    desc:
+      'Rus kuvvetleri 1 Kasım 1914\'te sınırı geçti. Enver Paşa 22 Aralık\'ta '
+      + '3. Ordu\'yu Sarıkamış\'ta Rus ordusunu kuşatmaya sürdü; kolordular '
+      + 'Allahüekber dağlarında kışa yenildi. Erzurum 1916\'da düştü, cephe '
+      + 'ancak Rus çöküşüyle geri alındı.',
+    start: '1914-11-01',
+    end: '1918-03-03',
+    bbox: [38.5, 37.8, 47.0, 42.5],
+    pin: [42.0, 40.2],
+    sides: { a: 'Osmanlı İmparatorluğu', b: 'Rusya' },
+    src: 'https://tr.wikipedia.org/wiki/Sarıkamış_Harekâtı',
+  },
+  {
     id: 'ww1_ortadogu',
     war: 'ww1',
     name: 'Orta Doğu Cephesi',

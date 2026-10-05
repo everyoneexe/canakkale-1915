@@ -220,6 +220,26 @@ export const TEMPLATES: readonly DivisionTemplate[] = [
     nation: 'hint',
     battalions: { piyade: 4, makineli: 1, sahra_topcu: 1 },
   },
+  // ── Rus ──────────────────────────────────────────────────────────────
+  {
+    id: 'ru_piyade_tumen',
+    name: 'Rus Piyade Tümeni',
+    nation: 'rus',
+    battalions: { piyade: 16, makineli: 3, sahra_topcu: 6, istihkam: 1 },
+  },
+  {
+    // Plastun: Kuban Kazaklarının yaya tugayı — dağ harbinde seçkin.
+    id: 'ru_plastun_tugay',
+    name: 'Plastun Tugayı',
+    nation: 'rus',
+    battalions: { avci: 6, makineli: 2, sahra_topcu: 1 },
+  },
+  {
+    id: 'ru_kazak_tugay',
+    name: 'Kazak Süvari Tugayı',
+    nation: 'rus',
+    battalions: { suvari: 6, makineli: 1 },
+  },
   // ── Fransız ──────────────────────────────────────────────────────────
   {
     id: 'fr_piyade_tumen',

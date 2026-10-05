@@ -36,6 +36,7 @@ export type Nation =
   | 'alman'
   | 'ingiliz'
   | 'fransiz'
+  | 'rus'
   | 'anzac'
   | 'hint'
   | 'newfoundland';
@@ -43,6 +44,10 @@ export type Nation =
 export const SIDE_OF_NATION: Record<Nation, Side> = {
   osmanli: 'ottoman',
   alman: 'ottoman',
+  // NOT: bu eşleme yalnız Çanakkale senaryosunun kısayolu. Dünya
+  // cephelerinde taraf ulus künyesinden gelir; aynı ulus savaşa göre
+  // taraf değiştirebilir (İtalya 1914/1915, Japonya 1914/1941).
+  rus: 'entente',
   ingiliz: 'entente',
   fransiz: 'entente',
   anzac: 'entente',
