@@ -73,7 +73,7 @@ export const THEATRES: readonly Theatre[] = [
     tagline: 'Siper savaşının doğduğu yer',
     desc:
       'Almanya 4 Ağustos 1914\'te tarafsız Belçika\'ya girdi ve Britanya aynı '
-      + 'gün savaş ilan etti. Schlieffen Planı 4 Eylül\'de Marne\'de durduruldu; '
+      + 'gün savaş ilan etti. Schlieffen Planı 5-12 Eylül\'de Marne\'de durduruldu; '
       + 'Ypres\'te kanatlardan dolanma çabaları sonuçsuz kalınca cephe '
       + 'Manş\'tan İsviçre\'ye kadar dondu ve dört yıl kıpırdamadı.',
     start: '1914-08-04',
@@ -137,9 +137,10 @@ export const THEATRES: readonly Theatre[] = [
     name: 'Balkan Cephesi',
     tagline: 'Savaşın başladığı cephe',
     desc:
-      'Savaş burada başladı. 6 Ekim 1915\'te Avusturya-Macaristan, Almanya ve '
-      + 'Bulgaristan Sırbistan\'ı istila etti; Sırp ordusu Karadağ ve '
-      + 'Arnavutluk üzerinden çekildi. Selanik cephesi 1918\'e kadar sürdü.',
+      'Savaş burada başladı. 6 Ekim 1915\'te Avusturya-Macaristan ve Almanya '
+      + 'Sırbistan\'a saldırdı; Bulgaristan 14 Ekim\'de savaş ilan edip doğudan '
+      + 'girdi. Sırp ordusu Karadağ ve Arnavutluk üzerinden çekildi. Selanik '
+      + 'cephesi 1918\'e kadar sürdü.',
     start: '1914-07-28',
     end: '1918-11-11',
     bbox: [17, 37.5, 29, 46.5],

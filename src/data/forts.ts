@@ -240,7 +240,8 @@ export const FORTS: readonly FortSpec[] = [
       'Değirmenburnu (26.3766,40.1556) arasındaki boğaza bakan kıyı kesimine ' +
       'yerleştirildi.',
     guns: { krupp_355_35: 2 },
-    note: 'Boğazın en ağır iki topundan biri burada — 355 mm, 16.900 m menzil.',
+    note: 'Dar Boğaz\'ın en ağır sınıfı — 355 mm, 16.900 m menzil. Aynı çaptan ' +
+      'Anadolu Hamidiye\'de iki, Çimenlik\'te bir adet daha vardı.',
     src: 'https://www.navyingallipoli.com/Fort_European_Hamidiye.asp',
     geoSrc: 'kaynak tarifinden yerleştirildi (yaklaşık)',
   },
