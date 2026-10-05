@@ -13,8 +13,8 @@ import type { MapKind } from './core/geo.ts';
 import { WEATHERS } from './data/units.ts';
 import { C } from './style/tokens.ts';
 import { briefingFor } from './data/briefing.ts';
-import { formatDate, newGame, scenario, setActiveScenario } from './engine/scenario.ts';
-import { newWorldGame } from './engine/world-scenario.ts';
+import { formatDate, scenario, setActiveScenario } from './engine/scenario.ts';
+import { setupFor } from './engine/theatre-setup.ts';
 import { SIDE_LABEL_WORLD } from './data/world1914.ts';
 import { THEATRES, THEATRE_BY_ID } from './data/theatres.ts';
 import type { Theatre, WarId } from './data/theatres.ts';
@@ -179,8 +179,8 @@ class Game {
 
   async newCampaign(side: Side): Promise<void> {
     const th = this.theatre;
-    const useOwnMap = th.ownMap === 'canakkale';
-    this.kind = useOwnMap ? 'canakkale' : 'dunya';
+    const setup = setupFor(th);
+    this.kind = setup.mapKind;
 
     $('acilis-durum').textContent = 'Harita yükleniyor…';
     // SIRA ÖNEMLİ: eski durum yeni haritayla çizilirse prov() eski il
@@ -198,10 +198,10 @@ class Game {
     $('acilis').dataset.cikis = '1';
     $('harita').dataset.giriyor = '1';
 
-    await loadMap(this.kind, useOwnMap ? undefined : th.bbox);
+    await loadMap(setup.mapKind, setup.bbox);
     await this.view.buildMap();
     setActiveScenario(null);
-    this.state = useOwnMap ? newGame(side) : newWorldGame(side, 19140728, th);
+    this.state = setup.makeGame(side);
     // 0. güne yazılı olaylar: `endTurn` gün sayacını tur sonunda artırdığı
     // için hiç kontrol edilmiyordu. Çanakkale'nin 19 Şubat açılış kartı ve
     // Mezopotamya'nın Fao çıkarması bu yüzden görünmüyordu.
@@ -212,7 +212,7 @@ class Game {
     $('acilis').hidden = true;
     delete $('acilis').dataset.cikis;
     delete $('harita').dataset.giriyor;
-    $('marka-ana').textContent = useOwnMap ? 'ÇANAKKALE' : th.name.toLocaleUpperCase('tr-TR');
+    $('marka-ana').textContent = setup.brand;
     $('marka-yil').textContent = th.start.slice(0, 4);
     this.view.selection = null;
     this.view.targeting = false;
@@ -220,8 +220,8 @@ class Game {
     this.refresh();
     // SIRA: önce animasyonsuz odakla, SONRA uçuşu başlat. Tersi olursa
     // uçuş biter bitmez centreOn eski (minik) zoom'u hedefleyip geri çıkıyor.
-    if (useOwnMap) {
-      this.view.focusInstant(side === 'ottoman' ? 'd_dar_bogaz' : 'd_bogaz_agzi');
+    if (setup.focus) {
+      this.view.focusInstant(setup.focus(side));
     }
     this.view.introSweep();
 
@@ -233,7 +233,7 @@ class Game {
     // gösterilmeli — yoksa Fao çıkarması kuyrukta bekleyip ilk tur sonunda
     // alakasız bir anda çıkıyordu.
     this.eventQueue = [
-      ...(useOwnMap ? [briefingFor(side, this.state.day, this.state.date)] : []),
+      ...(setup.briefing ? [briefingFor(side, this.state.day, this.state.date)] : []),
       ...this.state.pendingEvents,
       ...this.eventQueue,
     ];

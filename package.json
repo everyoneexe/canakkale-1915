@@ -9,7 +9,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "geodata": "tsx tools/build-map.ts",
+    "geodata": "python3 tools/build_map.py",
     "test": "tsx --test test/*.test.ts"
   },
   "dependencies": {

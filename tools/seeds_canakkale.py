@@ -1,0 +1,117 @@
+"""Çanakkale tiyatrosu il tohumları.
+
+build_map.py bu listeyi bölge adından import eder.
+"""
+from __future__ import annotations
+
+# kind: 'land' | 'sea'
+# place: places.json anahtarı (gerçek OSM koordinatı) — yoksa lonlat verilir.
+# lonlat: yalnızca DENİZ illeri ve coğrafi bölütler için; bunlar tarihsel bir
+#         iddia değil, oyun tasarımı gereği seçilmiş bölme merkezleridir.
+SEEDS: list[dict] = [
+    # ── Gelibolu Yarımadası — Güney Grubu (Seddülbahir cephesi)
+    dict(id="seddulbahir", name="Seddülbahir", place="seddulbahir", kind="land",
+         terrain="sahil", vp=3, supply=0, owner="ottoman", beach=True),
+    dict(id="zigindere", name="Zığındere", place="zigindere", kind="land",
+         terrain="kayalik", vp=1, supply=0, owner="ottoman"),
+    dict(id="alcitepe", name="Alçıtepe", place="alcitepe", kind="land",
+         terrain="tepe", vp=4, supply=0, owner="ottoman"),
+    dict(id="morto", name="Morto Koyu", place="morto_koyu", kind="land",
+         terrain="sahil", vp=1, supply=0, owner="ottoman", beach=True),
+    dict(id="tekke_burnu", name="Tekke Burnu", place="tekke_burnu", kind="land",
+         terrain="sahil", vp=1, supply=0, owner="ottoman", beach=True),
+    # ── Arıburnu / Anzak kesimi
+    dict(id="kabatepe", name="Kabatepe", place="kabatepe", kind="land",
+         terrain="sahil", vp=2, supply=0, owner="ottoman", beach=True),
+    dict(id="ariburnu", name="Arıburnu", place="ariburnu", kind="land",
+         terrain="kayalik", vp=3, supply=0, owner="ottoman", beach=True),
+    dict(id="kanlisirt", name="Kanlısırt", place="kanlisirt", kind="land",
+         terrain="kayalik", vp=2, supply=0, owner="ottoman"),
+    dict(id="conkbayiri", name="Conkbayırı", place="conkbayiri", kind="land",
+         terrain="dag", vp=5, supply=0, owner="ottoman"),
+    dict(id="kocacimen", name="Kocaçimentepe", place="kocacimentepe", kind="land",
+         terrain="dag", vp=4, supply=0, owner="ottoman"),
+    dict(id="bigali", name="Bigalı", place="bigali", kind="land",
+         terrain="tepe", vp=1, supply=8000, owner="ottoman"),
+    # ── Anafartalar / Suvla
+    dict(id="suvla", name="Suvla", place="kemikli_burnu", kind="land",
+         terrain="bataklik", vp=3, supply=0, owner="ottoman", beach=True),
+    # Tuz Gölü Nominatim'de yok; yükseklik ızgarasındaki en büyük İÇ su kütlesinden
+    # türetilir (aşağıdaki kutu içinde). Suvla çıkarmasının merkezindeki tuzla.
+    dict(id="tuzgolu", name="Tuz Gölü", lake_in_box=(26.21, 40.25, 26.33, 40.34),
+         kind="land", terrain="bataklik", vp=1, supply=0, owner="ottoman"),
+    dict(id="buyuk_anafarta", name="Büyük Anafarta", place="buyuk_anafarta", kind="land",
+         terrain="tepe", vp=2, supply=0, owner="ottoman"),
+    dict(id="kucuk_anafarta", name="Küçük Anafarta", place="kucuk_anafarta", kind="land",
+         terrain="tepe", vp=2, supply=0, owner="ottoman"),
+    dict(id="kirectepe", name="Kireçtepe", place="kirectepe", kind="land",
+         terrain="dag", vp=2, supply=0, owner="ottoman"),
+    # ── Boğaz hattı — Rumeli yakası
+    dict(id="eceabat", name="Maydos (Eceabat)", place="eceabat", kind="land",
+         terrain="sehir", vp=4, supply=20000, owner="ottoman"),
+    dict(id="kilitbahir", name="Kilitbahir", place="kilitbahir", kind="land",
+         terrain="tepe", vp=6, supply=12000, owner="ottoman"),
+    dict(id="gelibolu", name="Gelibolu", place="gelibolu", kind="land",
+         terrain="sehir", vp=5, supply=45000, owner="ottoman"),
+    dict(id="bolayir", name="Bolayır", place="bolayir", kind="land",
+         terrain="tepe", vp=4, supply=15000, owner="ottoman"),
+    # ── Boğaz hattı — Anadolu yakası
+    dict(id="kumkale", name="Kumkale", place="kumkale", kind="land",
+         terrain="ova", vp=3, supply=0, owner="ottoman", beach=True),
+    dict(id="halileli", name="Halileli", place="halileli", kind="land",
+         terrain="tepe", vp=1, supply=0, owner="ottoman"),
+    dict(id="truva", name="Truva Ovası", place="truva", kind="land",
+         terrain="ova", vp=1, supply=0, owner="ottoman"),
+    dict(id="erenkoy", name="Erenköy (İntepe)", place="erenkoy_intepe", kind="land",
+         terrain="tepe", vp=3, supply=0, owner="ottoman"),
+    dict(id="guzelyali", name="Güzelyalı", place="guzelyali", kind="land",
+         terrain="sahil", vp=1, supply=0, owner="ottoman", beach=True),
+    dict(id="dardanos", name="Dardanos", place="dardanos", kind="land",
+         terrain="tepe", vp=3, supply=0, owner="ottoman"),
+    dict(id="kepez", name="Kepez", place="kepez", kind="land",
+         terrain="sahil", vp=3, supply=0, owner="ottoman"),
+    dict(id="canakkale", name="Çanakkale", place="canakkale_sehir", kind="land",
+         terrain="sehir", vp=8, supply=50000, owner="ottoman"),
+    dict(id="nagara", name="Nağara", place="nagara", kind="land",
+         terrain="tepe", vp=5, supply=10000, owner="ottoman"),
+    dict(id="lapseki", name="Lâpseki", place="lapseki", kind="land",
+         terrain="ova", vp=3, supply=25000, owner="ottoman"),
+    # ── Adalar (İtilaf üsleri)
+    dict(id="bozcaada", name="Bozcaada", place="bozcaada", kind="land",
+         terrain="tepe", vp=2, supply=70000, owner="entente", beach=True),
+    dict(id="gokceada", name="Gökçeada", place="gokceada", kind="land",
+         terrain="dag", vp=2, supply=95000, owner="entente", beach=True),
+
+    # ── DENİZ illeri (tasarım gereği seçilmiş bölme merkezleri)
+    dict(id="d_ege_acik", name="Açık Ege (Limni yönü)", lonlat=(25.72, 40.02), kind="sea",
+         terrain="acik_deniz", vp=0, supply=0, owner="entente", current=0.3),
+    dict(id="d_gokceada_acigi", name="Gökçeada Açıkları", lonlat=(26.00, 40.16), kind="sea",
+         terrain="acik_deniz", vp=0, supply=0, owner="entente", current=0.3),
+    dict(id="d_bozcaada_acigi", name="Bozcaada Açıkları", lonlat=(26.07, 39.93), kind="sea",
+         terrain="acik_deniz", vp=0, supply=0, owner="entente", current=0.3),
+    dict(id="d_besike", name="Beşike Koyu", lonlat=(26.13, 39.93), kind="sea",
+         terrain="korfez", vp=0, supply=0, owner="entente", current=0.2),
+    dict(id="d_bogaz_agzi", name="Boğaz Ağzı", lonlat=(26.185, 40.015), kind="sea",
+         terrain="bogaz", vp=2, supply=0, owner="ottoman", current=3.0, width=3700),
+    dict(id="d_erenkoy", name="Erenköy Körfezi (Karanlık Liman)", lonlat=(26.295, 40.045),
+         kind="sea", terrain="korfez", vp=1, supply=0, owner="ottoman", current=2.0,
+         width=7200),
+    dict(id="d_kepez", name="Kepez Önü", lonlat=(26.378, 40.098), kind="sea",
+         terrain="bogaz", vp=2, supply=0, owner="ottoman", current=3.5, width=2820),
+    dict(id="d_sarisiglar", name="Sarısığlar Koyu", lonlat=(26.398, 40.127), kind="sea",
+         terrain="korfez", vp=1, supply=0, owner="ottoman", current=3.0),
+    dict(id="d_dar_bogaz", name="Dar Boğaz", lonlat=(26.397, 40.154), kind="sea",
+         terrain="bogaz", vp=6, supply=0, owner="ottoman", current=4.0, width=1500),
+    dict(id="d_nagara", name="Nağara Önü", lonlat=(26.414, 40.198), kind="sea",
+         terrain="bogaz", vp=3, supply=0, owner="ottoman", current=3.0, width=2400),
+    dict(id="d_marmara_agzi", name="Marmara Ağzı", lonlat=(26.56, 40.29), kind="sea",
+         terrain="bogaz", vp=4, supply=0, owner="ottoman", current=2.0, width=4000),
+    dict(id="d_gelibolu_onu", name="Gelibolu Önü", lonlat=(26.70, 40.42), kind="sea",
+         terrain="bogaz", vp=5, supply=0, owner="ottoman", current=1.5, width=5000),
+    dict(id="d_saros", name="Saros Körfezi", lonlat=(26.52, 40.55), kind="sea",
+         terrain="korfez", vp=0, supply=0, owner="ottoman", current=0.2),
+    dict(id="d_kabatepe_acigi", name="Kabatepe Açıkları", lonlat=(26.21, 40.205), kind="sea",
+         terrain="acik_deniz", vp=0, supply=0, owner="entente", current=0.4),
+    dict(id="d_suvla_acigi", name="Suvla Açıkları", lonlat=(26.19, 40.31), kind="sea",
+         terrain="korfez", vp=0, supply=0, owner="entente", current=0.3),
+]

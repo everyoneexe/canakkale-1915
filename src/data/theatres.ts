@@ -1,3 +1,5 @@
+import type { DetailedMapId } from '../core/geo.ts';
+
 /**
  * Cephe kaydı — iki dünya savaşı, kesin tarihler.
  *
@@ -29,8 +31,14 @@ export interface Theatre {
   readonly bbox?: readonly [number, number, number, number];
   /** Kürede işaretin konduğu nokta [lon, lat]. */
   readonly pin: readonly [number, number];
-  /** Kendi yüksek çözünürlüklü haritası varsa. */
-  readonly ownMap?: 'canakkale';
+  /**
+   * Kendi yüksek çözünürlüklü haritası varsa onun kimliği. Boşsa cephe
+   * ortak dünya haritasında `bbox` ile kırpılarak oynanır.
+   *
+   * Eklemek için: `tools/fetch_terrain.py <ad>` + `tools/build_map.py <ad>`,
+   * sonra `core/geo.ts` içindeki `DETAILED_MAPS` kaydına yaz.
+   */
+  readonly ownMap?: DetailedMapId;
   /**
    * 1914/1938 sınır verisi cephe tarihindeki durumu veremediğinde düzeltme.
    * Örnek: İtalya Seferi Temmuz 1943'te başlar; o tarihte Fransız Kuzey
