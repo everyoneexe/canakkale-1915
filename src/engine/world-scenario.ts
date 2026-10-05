@@ -12,7 +12,8 @@ import type {
 } from '../core/types.ts';
 import { freshAiMemory } from '../core/types.ts';
 import { metaOf, provinces, setProvinceValues } from '../core/geo.ts';
-import { TEMPLATE_BY_ID, aggregate } from '../data/units.ts';
+import { aggregate } from '../data/battalions.ts';
+import { TEMPLATE_BY_ID } from '../data/templates.ts';
 import { NATIONS, WORLD_EVENTS } from '../data/world1914.ts';
 import { FRONT_PACKS } from '../data/fronts/index.ts';
 import type { NationSpec } from '../data/world1914.ts';

@@ -23,7 +23,8 @@ import { COMMANDERS } from '../data/commanders.ts';
 import { AIR_WINGS, ENTENTE_LAND, FLEETS, OTTOMAN_LAND } from '../data/oob.ts';
 import { EVENTS } from '../data/events.ts';
 import { SHIP_CLASSES } from '../data/ships.ts';
-import { TEMPLATE_BY_ID, TEMPLATES, aggregate } from '../data/units.ts';
+import { aggregate } from '../data/battalions.ts';
+import { TEMPLATES, TEMPLATE_BY_ID } from '../data/templates.ts';
 
 export const START_DATE = '1915-02-19';
 export const END_DATE = '1916-01-09';

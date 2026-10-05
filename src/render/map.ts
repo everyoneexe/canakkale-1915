@@ -22,7 +22,8 @@ import {
 } from '../core/geo.ts';
 import { C, LAYER } from '../style/tokens.ts';
 import { fortRange, liveShips } from '../engine/naval.ts';
-import { TERRAINS, unitSymbol } from '../data/units.ts';
+import { unitSymbol } from '../data/symbols.ts';
+import { TERRAINS } from '../data/terrain.ts';
 import { TerrainTiles } from './tiles.ts';
 import { zscale } from './terrain-mosaic.ts';
 

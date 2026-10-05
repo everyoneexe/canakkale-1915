@@ -8,7 +8,7 @@ import type {
 } from '../core/types.ts';
 import { prov } from '../core/geo.ts';
 import { GUN_BY_ID } from '../data/guns.ts';
-import { TERRAINS } from '../data/units.ts';
+import { TERRAINS } from '../data/terrain.ts';
 import { MINEFIELD_BY_ID } from '../data/minefields.ts';
 import { formatDate } from '../engine/scenario.ts';
 import { commanderMods, templateStats } from '../engine/combat.ts';
