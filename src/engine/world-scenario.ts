@@ -311,6 +311,7 @@ function buildWorldSetup(th: Theatre): WorldSetup {
         moveProgress: 0,
         inCombat: false,
         embarkedIn: arrives > 0 ? 'bekleme' : null,
+        ...(arrives > 0 ? { arrivesOn: arrives } : {}),
       };
     });
 
@@ -398,6 +399,7 @@ function buildWorldSetup(th: Theatre): WorldSetup {
       moveProgress: 0,
       inCombat: false,
       embarkedIn: fArrives > 0 ? 'bekleme' : null,
+      ...(fArrives > 0 ? { arrivesOn: fArrives } : {}),
     };
   }
 
